@@ -4,7 +4,12 @@ import pymanopt
 
 from pymanopt.tools import diagnostics
 
-def disentangle(X, dis_dims, svd_dims, max_time=1e100, chi=20, n_iter=300, initial="identity", algorithm="alternating"):
+def disentangle(X, dis_dims, svd_dims,
+                max_time=1e100,
+                chi=20,
+                n_iter=300,
+                initial="identity",
+                algorithm="alternating"):
     '''
     Optimize a unitary matrix Q that contracts with dis_dims of X
     to minimize the entanglement across matrix with rows indexed by svd_dims. 
@@ -63,12 +68,10 @@ def disentangle(X, dis_dims, svd_dims, max_time=1e100, chi=20, n_iter=300, initi
             # Euclidian gradient
             s[:chi] = 0
             egrad = ten_to_mat(mat_to_ten(u @np.diag(2*s)@v, X.shape, svd_dims), dis_dims) @ (X_dis.T)
-
             return cost
         
         @pymanopt.function.numpy(manifold)
         def egrad(Q):
-
             # The following 4 lines are also computed in cost... 
             X_dis = ten_to_mat(X, dis_dims)
             QX = mat_to_ten(Q@X_dis, X.shape, dis_dims)
@@ -81,12 +84,57 @@ def disentangle(X, dis_dims, svd_dims, max_time=1e100, chi=20, n_iter=300, initi
     
             return egrad
         
+        @pymanopt.function.numpy(manifold)
+        def ehess(Q, E):
+            # The following 4 lines are also computed in cost & egrad... 
+            X_dis = ten_to_mat(X, dis_dims)
+            QX = mat_to_ten(Q@X_dis, X.shape, dis_dims)
+            QX_svd = ten_to_mat(QX, svd_dims)
+            u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
+
+            m, k, n = u.shape[0], u.shape[1], v.shape[1]
+            dfds = np.zeros(k)
+            dfds[chi:] = 2*s[chi:]
+
+            AEB = ten_to_mat(X, dis_dims)
+            AEB = ten_to_mat(mat_to_ten(AEB, X.shape, dis_dims), svd_dims)
+            
+            s_diff_matrix = (s**2)[:, None] - (s**2)[None, :]
+            # Avoid division by zero on the diagonal
+            with np.errstate(divide='ignore', invalid='ignore'):
+                f = 1.0 / s_diff_matrix
+                np.fill_diagonal(f, 0.0)
+            
+            DUE = u@(f*(u.T@AEB@v.T@np.diag(s) + np.diag(s)@v@AEB.T@u)) + (np.eye(m) - u@u.T)@AEB@v.T@np.diag(1/s)
+            d2fds2 = np.zeros(k)
+            d2fds2[chi:] = 2
+            Ds = np.diag(u.T@AEB@v.T)
+            DdfE = d2fds2*Ds
+
+            DVE = v.T@(f*(np.diag(s)@u.T@AEB@v.T + v@AEB.T@u@np.diag(s))) + (np.eye(n) - v.T@v)@AEB.T@u@np.diag(1/s)
+            
+            Dgrad_fbar = ( ten_to_mat(mat_to_ten(DUE@np.diag(dfds)@v, X.shape, svd_dims), dis_dims) 
+                         + ten_to_mat(mat_to_ten(u@np.diag(DdfE)@v, X.shape, svd_dims), dis_dims) 
+                         + ten_to_mat(mat_to_ten(u@np.diag(dfds)@DVE.T, X.shape, svd_dims), dis_dims) )
+
+            left = Dgrad_fbar@X_dis.T
+            grad_ext = egrad(Q)
+            right = E@grad_ext.T@Q + Q@left.T@Q + Q@grad_ext.T@E
+
+            lr = 0.5*(left - right)
+            ehess = 0.5*(lr - Q@lr.T@Q)
+
+            return ehess
+        
         problem = pymanopt.Problem(manifold=manifold, 
                                    cost=cost, 
-                                   euclidean_gradient=egrad)
+                                   euclidean_gradient=egrad,
+                                   euclidean_hessian=ehess)
         # diagnostics.check_gradient(problem)
-        solver = pymanopt.optimizers.SteepestDescent(verbosity=0)
-        Q = solver.run(problem, initial_point=Q0).point
+        diagnostics.check_hessian(problem)
+        
+        # solver = pymanopt.optimizers.SteepestDescent(verbosity=0)
+        # Q = solver.run(problem, initial_point=Q0).point
 
     else:
         raise ValueError("algorithm option not supported")
