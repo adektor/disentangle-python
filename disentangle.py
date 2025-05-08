@@ -1,15 +1,16 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import pymanopt
 
-from pymanopt import Problem
-from pymanopt.manifolds import Stiefel
-from pymanopt.optimizers import SteepestDescent
-from pymanopt.function import numpy as pymanopt_numpy
-from pymanopt.tools import diagnostics
+# from pymanopt import Problem
+# from pymanopt.manifolds import Stiefel
+# from pymanopt.optimizers import SteepestDescent
+# from pymanopt.function import numpy as pymanopt_numpy
+# from pymanopt.tools import diagnostics
 
-def disentangle(X, dis_dims, svd_dims, max_time=1e100, chi=16, n_iter=300, initial="identity", algorithm="alternating"):
+def disentangle(X, dis_dims, svd_dims, max_time=1e100, chi=20, n_iter=300, initial="identity", algorithm="alternating"):
     '''
-    Optimize a unitary matrix Q that contracts with dis_dims of X 
+    Optimize a unitary matrix Q that contracts with dis_dims of X
     to minimize the entanglement across matrix with rows indexed by svd_dims. 
 
     X: numpy array with 0,1,...,n-1 dimensions
@@ -26,26 +27,51 @@ def disentangle(X, dis_dims, svd_dims, max_time=1e100, chi=16, n_iter=300, initi
     dis_dims = sorted(set(dis_dims))
     svd_dims = sorted(set(svd_dims))
 
-    Xshape = X.shape
+    if initial == "identity":
+        Q = np.eye(np.prod([X.shape[d] for d in dis_dims]))
+    else:
+        raise ValueError("initial option not supported")
 
-    # initial disentangler
-    Q = np.eye(np.prod([X.shape[d] for d in dis_dims]))
+    if algorithm == "alternating":
+        for i in range(n_iter):
+            X_dis = ten_to_mat(X, dis_dims)
+            QX_dis = Q @ X_dis
+            QX = mat_to_ten(QX_dis, X.shape, dis_dims)
+            QX_svd = ten_to_mat(QX, svd_dims)
 
-    for i in range(n_iter):
-        X_dis = ten_to_mat(X, dis_dims)
-        X_dis = Q @ X_dis
-        QX = mat_to_ten(X_dis, Xshape, dis_dims)
-        QX_svd = ten_to_mat(QX, svd_dims)
+            u, s, v = np.linalg.svd(QX_svd)
+            err = np.linalg.norm(s[chi:])
+            u, s, v = u[:,:chi], s[:chi], v[:chi,:]
 
-        u, s, v = np.linalg.svd(QX_svd)
-        u, s, v = u[:,:chi], s[:chi], v[:chi,:]
+            QX_svd_chi = u@np.diag(s)@v
+            QX_chi = mat_to_ten(QX_svd_chi, X.shape, svd_dims)
 
-        QX_svd_chi = u@np.diag(s)@v
-        QX_chi = mat_to_ten(QX_svd_chi, Xshape, svd_dims)
+            M = ten_to_mat(QX_chi, dis_dims) @ (ten_to_mat(X, dis_dims).T)
+            u, _, v = np.linalg.svd(M, full_matrices=False)
+            Q = u@v
 
-        M = ten_to_mat(QX_chi, dis_dims) @ ten_to_mat(X, dis_dims).T
-        u, _, v = np.linalg.svd(M, full_matrices=False)
-        Q = u@v
+    elif algorithm == "Riemannian":
+        manifold = pymanopt.manifolds.Stiefel(A.shape[1], A.shape[0]*A.shape[2])
+
+        # @pymanopt.function.numpy(manifold)
+        # def cost(X):
+        #     X = X.reshape(A.shape[1], A.shape[0], A.shape[2]).transpose(1, 0, 2)
+        #     c = ncon([X, B, C, X, B, C], [(9, 1, 2), (2, 4, 5), (5, 7, 9), (8, 1, 3), (3, 4, 6), (6, 7, 8)]) 
+        #     c -= 2*ncon([X, B, C, T], [(6, 1, 2), (2, 3, 4), (4, 5, 6), (1, 3, 5)]) 
+        #     c += ncon([T, T], [(1, 2, 3), (1, 2, 3)])
+        #     return c/2
+        
+        # @pymanopt.function.numpy(manifold)
+        # def egrad(X):
+        #     X = X.reshape(A.shape[1], A.shape[0], A.shape[2]).transpose(1, 0, 2)
+        #     g = ncon([B, C, X, B, C], [(-3, 1, 3), (3, 4, -1), (6, -2, 5), (5, 1, 2), (2, 4, 6)]) 
+        #     g -= ncon([B, C, T], [(-3, 1, 2), (2, 3, -1), (-2, 1, 3)])
+        #     return g.transpose(1, 0, 2).reshape(A.shape[1], A.shape[0]*A.shape[2])
+            
+
+
+    else:
+        raise ValueError("algorithm option not supported")
 
     return Q
 
@@ -101,25 +127,3 @@ def mat_to_ten(X_mat, orig_shape, row_dims):
     X = X_perm.transpose(inv_perm)
 
     return X
-
-if __name__ == "__main__":
-    X = np.random.rand(4,5,6,7)
-    dis_dims = [0, 2]
-    svd_dims = [1, 3]
-
-    X_svd = ten_to_mat(X, svd_dims)
-    _, s0, _ = np.linalg.svd(X_svd)
-
-    Q = disentangle(X, dis_dims, svd_dims)
-
-    QX_dis = Q @ ten_to_mat(X, dis_dims)
-    QX = mat_to_ten(QX_dis, X.shape, dis_dims)
-    QX_svd = ten_to_mat(QX, svd_dims)
-    _, s, _ = np.linalg.svd(QX_svd)
-
-    print(Q)
-    print(s-s0)
-    plt.semilogy(s0, label="before")
-    plt.semilogy(s, label="after")
-    plt.legend()
-    plt.show()
