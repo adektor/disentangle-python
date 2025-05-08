@@ -2,11 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pymanopt
 
-# from pymanopt import Problem
-# from pymanopt.manifolds import Stiefel
-# from pymanopt.optimizers import SteepestDescent
-# from pymanopt.function import numpy as pymanopt_numpy
-# from pymanopt.tools import diagnostics
+from pymanopt.tools import diagnostics
 
 def disentangle(X, dis_dims, svd_dims, max_time=1e100, chi=20, n_iter=300, initial="identity", algorithm="alternating"):
     '''
@@ -27,12 +23,15 @@ def disentangle(X, dis_dims, svd_dims, max_time=1e100, chi=20, n_iter=300, initi
     dis_dims = sorted(set(dis_dims))
     svd_dims = sorted(set(svd_dims))
 
+    n = np.prod([X.shape[d] for d in dis_dims]) # disentangler is n x n
+    
     if initial == "identity":
-        Q = np.eye(np.prod([X.shape[d] for d in dis_dims]))
+        Q0 = np.eye(n)
     else:
         raise ValueError("initial option not supported")
 
     if algorithm == "alternating":
+        Q = Q0
         for i in range(n_iter):
             X_dis = ten_to_mat(X, dis_dims)
             QX_dis = Q @ X_dis
@@ -46,29 +45,48 @@ def disentangle(X, dis_dims, svd_dims, max_time=1e100, chi=20, n_iter=300, initi
             QX_svd_chi = u@np.diag(s)@v
             QX_chi = mat_to_ten(QX_svd_chi, X.shape, svd_dims)
 
-            M = ten_to_mat(QX_chi, dis_dims) @ (ten_to_mat(X, dis_dims).T)
+            M = ten_to_mat(QX_chi, dis_dims) @ (X_dis.T)
             u, _, v = np.linalg.svd(M, full_matrices=False)
             Q = u@v
 
     elif algorithm == "Riemannian":
-        manifold = pymanopt.manifolds.Stiefel(A.shape[1], A.shape[0]*A.shape[2])
+        manifold = pymanopt.manifolds.Stiefel(n, n)
 
-        # @pymanopt.function.numpy(manifold)
-        # def cost(X):
-        #     X = X.reshape(A.shape[1], A.shape[0], A.shape[2]).transpose(1, 0, 2)
-        #     c = ncon([X, B, C, X, B, C], [(9, 1, 2), (2, 4, 5), (5, 7, 9), (8, 1, 3), (3, 4, 6), (6, 7, 8)]) 
-        #     c -= 2*ncon([X, B, C, T], [(6, 1, 2), (2, 3, 4), (4, 5, 6), (1, 3, 5)]) 
-        #     c += ncon([T, T], [(1, 2, 3), (1, 2, 3)])
-        #     return c/2
+        @pymanopt.function.numpy(manifold)
+        def cost(Q):
+            X_dis = ten_to_mat(X, dis_dims)
+            QX = mat_to_ten(Q@X_dis, X.shape, dis_dims)
+            QX_svd = ten_to_mat(QX, svd_dims)
+            u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
+            cost = np.linalg.norm(s[chi:])**2
+
+            # Euclidian gradient
+            s[:chi] = 0
+            egrad = ten_to_mat(mat_to_ten(u @np.diag(2*s)@v, X.shape, svd_dims), dis_dims) @ (X_dis.T)
+
+            return cost
         
-        # @pymanopt.function.numpy(manifold)
-        # def egrad(X):
-        #     X = X.reshape(A.shape[1], A.shape[0], A.shape[2]).transpose(1, 0, 2)
-        #     g = ncon([B, C, X, B, C], [(-3, 1, 3), (3, 4, -1), (6, -2, 5), (5, 1, 2), (2, 4, 6)]) 
-        #     g -= ncon([B, C, T], [(-3, 1, 2), (2, 3, -1), (-2, 1, 3)])
-        #     return g.transpose(1, 0, 2).reshape(A.shape[1], A.shape[0]*A.shape[2])
-            
+        @pymanopt.function.numpy(manifold)
+        def egrad(Q):
 
+            # The following 4 lines are also computed in cost... 
+            X_dis = ten_to_mat(X, dis_dims)
+            QX = mat_to_ten(Q@X_dis, X.shape, dis_dims)
+            QX_svd = ten_to_mat(QX, svd_dims)
+            u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
+
+            # Euclidian gradient
+            s[:chi] = 0
+            egrad = ten_to_mat(mat_to_ten(u @np.diag(2*s)@v, X.shape, svd_dims), dis_dims) @ (X_dis.T)
+    
+            return egrad
+        
+        problem = pymanopt.Problem(manifold=manifold, 
+                                   cost=cost, 
+                                   euclidean_gradient=egrad)
+        # diagnostics.check_gradient(problem)
+        solver = pymanopt.optimizers.SteepestDescent(verbosity=0)
+        Q = solver.run(problem, initial_point=Q0).point
 
     else:
         raise ValueError("algorithm option not supported")

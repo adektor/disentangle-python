@@ -8,15 +8,16 @@ svd_dims = [0, 2]
 X_svd = ten_to_mat(X, svd_dims)
 _, s0, _ = np.linalg.svd(X_svd)
 
-Q = disentangle(X, dis_dims, svd_dims)
+# Alternating: 
+# Q = disentangle(X, dis_dims, svd_dims)
+
+# Riemannian:
+Q = disentangle(X, dis_dims, svd_dims, algorithm="Riemannian")
 
 QX_dis = Q @ ten_to_mat(X, dis_dims)
 QX = mat_to_ten(QX_dis, X.shape, dis_dims)
 QX_svd = ten_to_mat(QX, svd_dims)
 _, s, _ = np.linalg.svd(QX_svd)
-
-# print(Q)
-# print(s-s0)
 plt.semilogy(s0, label="before")
 plt.semilogy(s, label="after")
 plt.legend()
