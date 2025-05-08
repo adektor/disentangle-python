@@ -9,10 +9,10 @@ X_svd = ten_to_mat(X, svd_dims)
 _, s0, _ = np.linalg.svd(X_svd)
 
 # Alternating: 
-# Q = disentangle(X, dis_dims, svd_dims)
+Q = disentangle(X, dis_dims, svd_dims)
 
 # Riemannian:
-Q = disentangle(X, dis_dims, svd_dims, algorithm="Riemannian")
+# Q = disentangle(X, dis_dims, svd_dims, algorithm="Riemannian")
 
 QX_dis = Q @ ten_to_mat(X, dis_dims)
 QX = mat_to_ten(QX_dis, X.shape, dis_dims)

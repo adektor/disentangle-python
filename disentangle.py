@@ -5,11 +5,13 @@ import pymanopt
 from pymanopt.tools import diagnostics
 
 def disentangle(X, dis_dims, svd_dims,
-                max_time=1e100,
                 chi=20,
                 n_iter=300,
                 initial="identity",
-                algorithm="alternating"):
+                algorithm="alternating",
+                dcost_thresh=1e-6,
+                max_time=1e100,
+                verbosity=0):
     '''
     Optimize a unitary matrix Q that contracts with dis_dims of X
     to minimize the entanglement across matrix with rows indexed by svd_dims. 
@@ -37,6 +39,7 @@ def disentangle(X, dis_dims, svd_dims,
 
     if algorithm == "alternating":
         Q = Q0
+        cost = []
         for i in range(n_iter):
             X_dis = ten_to_mat(X, dis_dims)
             QX_dis = Q @ X_dis
@@ -44,7 +47,7 @@ def disentangle(X, dis_dims, svd_dims,
             QX_svd = ten_to_mat(QX, svd_dims)
 
             u, s, v = np.linalg.svd(QX_svd)
-            err = np.linalg.norm(s[chi:])
+            cost.append(np.linalg.norm(s[chi:]))
             u, s, v = u[:,:chi], s[:chi], v[:chi,:]
 
             QX_svd_chi = u@np.diag(s)@v
@@ -53,6 +56,10 @@ def disentangle(X, dis_dims, svd_dims,
             M = ten_to_mat(QX_chi, dis_dims) @ (X_dis.T)
             u, _, v = np.linalg.svd(M, full_matrices=False)
             Q = u@v
+            
+            if i>0 and np.abs(cost[-1]-cost[-2]) < dcost_thresh:
+                print("exiting at iteration {0}".format(i))
+                break
 
     elif algorithm == "Riemannian":
         manifold = pymanopt.manifolds.Stiefel(n, n)
