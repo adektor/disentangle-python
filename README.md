@@ -9,13 +9,14 @@ This repository provides functionality for reducing entanglement in a tensor acr
 - `X`: The input tensor to be disentangled.
 - `dis_dims`: A list of dimensions of `X` on which the unitary disentangling matrix acts.
 - `svd_dims`: A list of dimensions of `X` across which the entanglement is minimized.
+- `chi`: target truncation rank
 
 For example, if `X` is a 4D NumPy array with dimensions `[0, 1, 2, 3]`, then
 
 ```python
-Q = disentangle(X, dis_dims=[0, 1], svd_dims=[0, 2], **kwargs)
+Q = disentangle(X, dis_dims=[0, 1], svd_dims=[0, 2], chi=4, **kwargs)
 ```
-optimizes a unitary matrix `Q` to minimize the error of the truncated SVD in the following tensor network diagram. 
+optimizes a unitary matrix `Q` to minimize the error of the rank-`chi` truncated SVD in the following tensor network diagram. 
 
 <img src="images/dis_4ten.svg" alt="Disentangling Diagram" width="400"/>
 
