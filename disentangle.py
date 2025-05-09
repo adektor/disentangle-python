@@ -2,7 +2,7 @@ import numpy as np
 import pymanopt
 from rank_surrogates import *
 
-from pymanopt.tools import diagnostics
+from pymanopt.tools import diagnostics # for gradient and hessian checks
 
 def disentangle(X, dis_dims, svd_dims,
                 chi=20,
