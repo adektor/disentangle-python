@@ -17,7 +17,7 @@ disentangle(X, dis_dims=[0, 1], svd_dims=[0, 2], **kwargs)
 ```
 optimizes a unitary matrix `Q` to minimize the error of the truncated SVD in the following tensor network diagram. 
 
-![Diagram](images/dis_4ten.svg)
+<img src="images/dis_4ten.svg" alt="Disentangling Diagram" width="400"/>
 
 The user can specify additional keyword arguments, such as:
 - Optimization algorithm
