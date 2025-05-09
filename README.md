@@ -2,7 +2,7 @@
 
 This repository provides functionality for reducing entanglement in a tensor across specified dimensions by applying a unitary transformation to another set of dimensions. Such disentangling is important for many tensor network algorithms.
 
-## Main Function
+## Usage
 
 ### `disentangle(X, dis_dims, svd_dims, **kwargs)`
 
