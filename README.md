@@ -10,6 +10,8 @@ This repository provides functionality for reducing entanglement in a tensor acr
 - `dis_dims`: List of dimensions of `X` on which the unitary disentangling matrix acts.
 - `svd_dims`: List of dimensions of `X` across which the entanglement is minimized.
 
+![Diagram](images/dis_4ten.svg)
+
 The user can specify additional keyword arguments, such as:
 - Optimization algorithm
 - Maximum wall time for disentangling
