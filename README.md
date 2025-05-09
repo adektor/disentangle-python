@@ -13,7 +13,7 @@ This repository provides functionality for reducing entanglement in a tensor acr
 For example, if `X` is a 4D NumPy array with dimensions `[0, 1, 2, 3]`, then
 
 ```python
-disentangle(X, dis_dims=[0, 1], svd_dims=[0, 2], **kwargs)
+Q = disentangle(X, dis_dims=[0, 1], svd_dims=[0, 2], **kwargs)
 ```
 optimizes a unitary matrix `Q` to minimize the error of the truncated SVD in the following tensor network diagram. 
 
