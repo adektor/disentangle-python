@@ -6,7 +6,7 @@ This repository provides functionality for reducing entanglement in a tensor acr
 
 ### `disentangle(X, dis_dims, svd_dims, **kwargs)`
 
-- `X`: The input tensor to be disentangled.
+- `X`: The input tensor (NumPy array) to be disentangled.
 - `dis_dims`: A list of dimensions of `X` on which the unitary disentangling matrix acts.
 - `svd_dims`: A list of dimensions of `X` across which the entanglement is minimized.
 - `chi`: target truncation rank
