@@ -1,15 +1,16 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from disentangle import *
 
-X = np.random.rand(4,5,6,7)
+X = np.random.rand(12,12,12,12)
 dis_dims = [0, 1]
 svd_dims = [0, 2]
 
 X_svd = ten_to_mat(X, svd_dims)
 _, s0, _ = np.linalg.svd(X_svd)
 
-# Alternating: 
-Q = disentangle(X, dis_dims, svd_dims)
+# Alternating:
+Q = disentangle(X, dis_dims, svd_dims, chi = 12, n_iter = 1000, verbose=True)
 
 # Riemannian:
 # Q = disentangle(X, dis_dims, svd_dims, algorithm="Riemannian")
