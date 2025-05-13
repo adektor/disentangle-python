@@ -1,6 +1,6 @@
 # Tensor Disentangler
 
-This repository provides functionality for reducing entanglement in a tensor across specified dimensions by applying a unitary transformation to another set of dimensions. Such disentangling is important for many tensor network algorithms.
+Disentangling is important for many tensor network algorithms. This repository provides functionality for optimizing unitary disentangler matrices to reduce entanglement across specified dimensions of a input tensor. The user provides the tensor, dimensions on which the unitary matrix is applied, and dimensions across which the entanglement is minimized. 
 
 ## Usage
 
