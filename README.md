@@ -11,7 +11,7 @@ Disentangling is important for many tensor network algorithms. This repository p
 - `svd_legs`: A list of legs of `X` across which the entanglement is minimized.
 - `chi`: target truncation rank
 
-For example, if `X` is a 4D NumPy array with legs indexed by `[0, 1, 2, 3]`, then
+For example, if `X` is a 4D NumPy array then
 
 ```python
 Q = disentangle(X, dis_legs=[0, 1], svd_legs=[0, 2], chi=4, **kwargs)
