@@ -21,14 +21,14 @@ U0, S0, V0 = disentangled_usv(X, Qeye, dis_legs, svd_legs)
 Qr, Ur, Sr, Vr = disentangle(X, dis_legs, svd_legs, 
                   optimizer="rCG", 
                   objective=renyi,
-                  alpha=0.5
+                  alpha=0.5,
                   )
 
 # Let's compare with a second disentangler optimized for rank-30 truncation error using the alternating optimizer
 Qa, Ua, Sa, Va = disentangle(X, dis_legs, svd_legs, 
                   optimizer="alternating", 
                   objective=trunc_error,
-                  chi=60
+                  chi=60,
                   )
 
 # plot results

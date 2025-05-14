@@ -1,7 +1,6 @@
 import numpy as np
 import pymanopt
-import pymanopt.tools
-import pymanopt.tools.diagnostics
+import time
 
 # TODO: - Printing and verbosity in alternating optimizer to be similar to the verbosity of Pymanopt
 #       - Check user-supplied objective and optimizer parameters
@@ -197,6 +196,8 @@ def disentangle(X, dis_legs, svd_legs,
 
     # ---------------- Alternating optimizer ---------------- #
     if optimizer.lower() in {"alternating", "alt"}:
+        start_time = time.time()
+
         Q = Q0
         cost = [np.linalg.norm(s0[chi:])]
         for i in range(max_iterations):
@@ -217,8 +218,12 @@ def disentangle(X, dis_legs, svd_legs,
             Q = u@v
             
             if i>0 and np.abs(cost[-1]-cost[-2]) < min_grad_norm:
-                if verbosity == 1:
-                    print("exiting at iteration {0}".format(i))
+                print("min_grad_norm reached at iteration {0} in alternating optimizer. Exiting".format(i))
+                break
+
+            elapsed_time = time.time() - start_time
+            if elapsed_time > max_time:
+                print("Time limit reached in alternating optimizer. Exiting.")
                 break
 
     # ---------------- Riemannian optimizer ---------------- #
