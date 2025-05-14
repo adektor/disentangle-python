@@ -20,8 +20,8 @@ s0 = disentangled_spectrum(X, I, dis_legs, svd_legs)
 # Riemannian CG:
 Q_r = disentangle(X, dis_legs, svd_legs, 
                   optimizer="CG", 
-                  objective=nuclear,
-                  chi=20,
+                  objective=von_neumann,
+                  chi=0,
                   alpha=0.5,
                   check_grad=True,
                   check_hess=False)

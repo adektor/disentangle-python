@@ -94,3 +94,15 @@ def trunc_error(Q, X, dis_legs, svd_legs, alpha, chi):
     egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
 
     return cost, egrad
+
+def von_neumann(Q, X, dis_legs, svd_legs, alpha, chi):
+    X_dis = ten_to_mat(X, dis_legs)
+    QX = mat_to_ten(Q@X_dis, X.shape, dis_legs)
+    QX_svd = ten_to_mat(QX, svd_legs)
+    u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
+
+    cost = -2*np.sum(s**2*np.log(s))
+    ds = -2*s*(np.log(s**2) + 1)
+    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
+
+    return cost, egrad

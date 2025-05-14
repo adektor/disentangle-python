@@ -2,35 +2,50 @@ import numpy as np
 import pymanopt
 from utilities import *
 from pymanopt.tools import diagnostics
+import warnings
 
 def disentangle(X, dis_legs, svd_legs,
-                max_iterations=500,
                 initial="identity",
-                optimizer="CG",
+                max_iterations=500,
+                min_grad_norm=1e-6,
+                max_time=1e100,
+                optimizer="rCG",
                 objective=renyi,
                 alpha=0.5,
                 chi=0,
-                dcost_thresh=1e-10,
-                max_time=1e100,
-                verbosity=1,
+                verbosity=0,
                 check_grad=False,
                 check_hess=False):
     '''
     Optimize a unitary matrix Q that contracts with dis_legs of X
     to minimize the entanglement across matrix with rows indexed by svd_legs. 
 
-    Inputs:
-    ------
-    X: numpy array with 0,1,...,n-1 dimensions
-    dis_legs: list of dimensions indicating legs the disentangler is applied to
-    svd_legs: list of dimensions indicating legs for disentangling
-    Q0: initial disentangler (unitary matrix of size () )
-    max_time: max wall time
-    initial: initial disentangler
-    algorithm: disentangler algorithm ()
+    Required Inputs:
+    ---------------
+    X        : NumPy array
+    dis_legs : list of dimensions indicating legs the disentangler is applied to
+    svd_legs : list of dimensions indicating legs for disentangling
+    
+    Optional Inputs:
+    ---------------
+    initial="identity" : initial disentangler, user can specify "random" or 2D NumPy array with compatible dimensions
+    max_iterations=500 : maximum number of iterations of the selected optimizer
+    min_grad_norm=1e-6 : termination threshold for norm of the gradient
+    max_time=1e100     : maximum optimizer run time in seconds
+    optimizer="CG"     : default "rCG"=Riemannian Conjugate Gradient
+    objective=renyi    : objective function to optimize
+    alpha=0.5          : parameter for renyi entropy
+    chi=0              : parameter for trunc_error objective
+    verbosity=0
+    
+    Temporary Inputs (for debugging):
+    --------------------------------
+    check_grad=False
+    check_hess=False
     '''
 
-    # ---------------- check inputs ---------------- #
+    # ------------------ check inputs ------------------ #
+    # tensor dimensions
     assert all(0 <= d < X.ndim for d in dis_legs), "Invalid dimension in dis_legs"
     assert all(0 <= d < X.ndim for d in svd_legs), "Invalid dimension in svd_legs"
     dis_legs = sorted(set(dis_legs))
@@ -41,6 +56,7 @@ def disentangle(X, dis_legs, svd_legs,
     X_svd = ten_to_mat(X, svd_legs)
     s0 = np.linalg.svd(X_svd, compute_uv=False)
 
+    # initial disentangler
     if initial == "identity":
         Q0 = np.eye(n)
     elif initial == "random":
@@ -51,6 +67,7 @@ def disentangle(X, dis_legs, svd_legs,
     else:
         raise TypeError("Initial disentangler must be 'identity', 'random', or a 2D NumPy array with compatible dimensions.")
 
+    # optimizer parameters
 
     # ---------------- Alternating optimizer ---------------- #
     if optimizer == "alternating":
@@ -73,15 +90,12 @@ def disentangle(X, dis_legs, svd_legs,
             u, _, v = np.linalg.svd(M, full_matrices=False)
             Q = u@v
             
-            if i>0 and np.abs(cost[-1]-cost[-2]) < dcost_thresh:
+            if i>0 and np.abs(cost[-1]-cost[-2]) < min_grad_norm: # CHANGE 
                 if verbosity == 1:
                     print("exiting at iteration {0}".format(i))
                 break
 
-        if verbosity == 1:
-            print("reduced truncation error from {0} to {1} "
-                    "in {2} iterations of alternating".format(cost[0], cost[-1], i))
-            
+
 
     # ---------------- Riemannian optimizer ---------------- #
     else:
@@ -147,13 +161,13 @@ def disentangle(X, dis_legs, svd_legs,
         if check_hess:
             diagnostics.check_hessian(problem)
         
-        if optimizer=="CG":
+        if optimizer=="rCG":
             solver = pymanopt.optimizers.ConjugateGradient(max_iterations=max_iterations, 
                                                         max_time=max_time, 
                                                         min_gradient_norm=1e-8, 
                                                         log_verbosity=verbosity
                                                         )
-        elif optimizer=="SD":
+        elif optimizer=="rSD":
             solver = pymanopt.optimizers.SteepestDescent(max_iterations=max_iterations, 
                                                         max_time=max_time, 
                                                         min_gradient_norm=1e-8, 
