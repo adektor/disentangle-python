@@ -18,17 +18,17 @@ def disentangled_spectrum(X, Q, dis_legs, svd_legs):
 s0 = disentangled_spectrum(X, I, dis_legs, svd_legs)
 
 # Alternating optimizer:
-Q_alt = disentangle(X, dis_legs, svd_legs, chi = 12, n_iter = 1000, verbose=True)
-s_alt = disentangled_spectrum(X, Q_alt, dis_legs, svd_legs)
+# Q_alt = disentangle(X, dis_legs, svd_legs, chi = 12, n_iter = 1000, verbose=True)
+# s_alt = disentangled_spectrum(X, Q_alt, dis_legs, svd_legs)
 
 # Riemannian:
-Q_r = disentangle(X, dis_legs, svd_legs, algorithm="Riemannian")
+Q_r = disentangle(X, dis_legs, svd_legs, algorithm="Riemannian", chi=0, check_grad=True)
 s_r = disentangled_spectrum(X, Q_r, dis_legs, svd_legs)
 
 # plot results
 plt.figure()
 plt.semilogy(s0, label="no disentangler")
-plt.semilogy(s_alt, label="alternating")
+# plt.semilogy(s_alt, label="alternating")
 plt.semilogy(s_r, label="Riemannian")
 plt.ylabel('singular values')
 plt.xlabel('index')

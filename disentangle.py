@@ -5,14 +5,16 @@ from rank_surrogates import *
 from pymanopt.tools import diagnostics # for gradient and hessian checks
 
 def disentangle(X, dis_legs, svd_legs,
-                chi=20,
+                chi=0,
                 n_iter=300,
                 initial="identity",
                 algorithm="alternating",
                 surrogate=renyi,
                 dcost_thresh=1e-10,
                 max_time=1e100,
-                verbose=False):
+                verbosity=1,
+                check_grad=False,
+                check_hess=False):
     '''
     Optimize a unitary matrix Q that contracts with dis_legs of X
     to minimize the entanglement across matrix with rows indexed by svd_legs. 
@@ -26,6 +28,7 @@ def disentangle(X, dis_legs, svd_legs,
     algorithm: disentangler algorithm ()
     '''
 
+    # ---------------- check inputs ---------------- #
     assert all(0 <= d < X.ndim for d in dis_legs), "Invalid dimension in dis_legs"
     assert all(0 <= d < X.ndim for d in svd_legs), "Invalid dimension in svd_legs"
     dis_legs = sorted(set(dis_legs))
@@ -41,6 +44,8 @@ def disentangle(X, dis_legs, svd_legs,
     else:
         raise ValueError("initial option not supported")
 
+
+    # ---------------- Alternating optimizer ---------------- #
     if algorithm == "alternating":
         Q = Q0
         cost = [np.linalg.norm(s0[chi:])]
@@ -62,15 +67,16 @@ def disentangle(X, dis_legs, svd_legs,
             Q = u@v
             
             if i>0 and np.abs(cost[-1]-cost[-2]) < dcost_thresh:
-                if verbose:
+                if verbosity == 1:
                     print("exiting at iteration {0}".format(i))
                 break
 
-        if verbose:
+        if verbosity == 1:
             print("reduced truncation error from {0} to {1} "
                     "in {2} iterations of alternating".format(cost[0], cost[-1], i))
             
 
+    # ---------------- Riemannian optimizer ---------------- #
     elif algorithm == "Riemannian":
         phi = surrogate
         manifold = pymanopt.manifolds.Stiefel(n, n)
@@ -82,8 +88,7 @@ def disentangle(X, dis_legs, svd_legs,
             QX_svd = ten_to_mat(QX, svd_legs)
             u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
 
-            phi, _, _ = surrogate(s[chi:])
-            cost = np.sum(phi)
+            cost, _, _ = surrogate(s[chi:])
             # cost = np.linalg.norm(s[chi:])**2
             # cost = np.linalg.norm(s)**2
             return cost
@@ -149,10 +154,16 @@ def disentangle(X, dis_legs, svd_legs,
                                    euclidean_gradient=egrad,
                                 #    euclidean_hessian=ehess
                                    )
-        # diagnostics.check_gradient(problem)
-        # diagnostics.check_hessian(problem)
+        if check_grad:
+            diagnostics.check_gradient(problem)
+        if check_hess:
+            diagnostics.check_hessian(problem)
         
-        solver = pymanopt.optimizers.SteepestDescent(verbosity=0)
+        solver = pymanopt.optimizers.ConjugateGradient(max_iterations=100, 
+                                                       max_time=max_time, 
+                                                       min_gradient_norm=1e-8, 
+                                                       log_verbosity=verbosity
+                                                       )
         Q = solver.run(problem, initial_point=Q0).point
 
     else:
@@ -160,6 +171,8 @@ def disentangle(X, dis_legs, svd_legs,
 
     return Q
 
+
+# ---------------- Helper functions ---------------- #
 def ten_to_mat(X, row_legs):
         ''' 
         Reshapes a tensor X into a matrix X_mat with 
