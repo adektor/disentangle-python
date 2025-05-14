@@ -26,11 +26,11 @@ optimizes a unitary matrix `Q` to minimize the error of the rank-`chi` truncated
 
 <img src="images/dis_4ten.svg" alt="Disentangling Diagram" width="400"/>
 
-The user can specify additional keyword arguments, such as:
+## Features
+
+The user can specify several keyword arguments. For a comprehensive list we should write some documentation. 
 - Optimization algorithm: Alternating lineary method, Riemannian Conjugate Gradient, Riemannian Steepest Descent, and more
 - Optimization objective function: Renyi entropy, Von-Neumann entropy, or truncation error
 - Initial disentangler
 - Maximum wall time and other stopping criteria
 - Other advanced options
-
-## Features
