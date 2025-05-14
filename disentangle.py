@@ -2,7 +2,11 @@ import numpy as np
 import pymanopt
 from utilities import *
 from pymanopt.tools import diagnostics
-import warnings
+
+# TODO: - Printing and verbosity in alternating optimizer to be similar to the verbosity of Pymanopt
+#       - Check user-supplied objective and optimizer parameters
+#       - Return info on the performance of the optimization
+#       - Riemannian Hessian(s)
 
 def disentangle(X, dis_legs, svd_legs,
                 initial="identity",
@@ -44,7 +48,7 @@ def disentangle(X, dis_legs, svd_legs,
     check_hess=False
     '''
 
-    # ------------------ check inputs ------------------ #
+    # ------------------ Check inputs ------------------ #
     # tensor dimensions
     assert all(0 <= d < X.ndim for d in dis_legs), "Invalid dimension in dis_legs"
     assert all(0 <= d < X.ndim for d in svd_legs), "Invalid dimension in svd_legs"
@@ -66,6 +70,12 @@ def disentangle(X, dis_legs, svd_legs,
             raise ValueError("Initial disentangler has incorrect dimensions.")
     else:
         raise TypeError("Initial disentangler must be 'identity', 'random', or a 2D NumPy array with compatible dimensions.")
+
+    # objective parameters
+    # Here we can check for possible mistakes when selecting combinations of objectives and parameters. 
+    # For example, if the user specifies Renyi objective and also specifies truncation rank chi. 
+    # Or if the user specifies trunc_error objective and also specifies an alpha...
+    # Are there other combinations that the user should be warned of? 
 
     # optimizer parameters
 
@@ -90,12 +100,10 @@ def disentangle(X, dis_legs, svd_legs,
             u, _, v = np.linalg.svd(M, full_matrices=False)
             Q = u@v
             
-            if i>0 and np.abs(cost[-1]-cost[-2]) < min_grad_norm: # CHANGE 
+            if i>0 and np.abs(cost[-1]-cost[-2]) < min_grad_norm:
                 if verbosity == 1:
                     print("exiting at iteration {0}".format(i))
                 break
-
-
 
     # ---------------- Riemannian optimizer ---------------- #
     else:
@@ -164,18 +172,19 @@ def disentangle(X, dis_legs, svd_legs,
         if optimizer=="rCG":
             solver = pymanopt.optimizers.ConjugateGradient(max_iterations=max_iterations, 
                                                         max_time=max_time, 
-                                                        min_gradient_norm=1e-8, 
-                                                        log_verbosity=verbosity
+                                                        min_gradient_norm=min_grad_norm, 
+                                                        verbosity=verbosity
                                                         )
         elif optimizer=="rSD":
             solver = pymanopt.optimizers.SteepestDescent(max_iterations=max_iterations, 
                                                         max_time=max_time, 
-                                                        min_gradient_norm=1e-8, 
-                                                        log_verbosity=verbosity
+                                                        min_gradient_norm=min_grad_norm, 
+                                                        verbosity=verbosity
                                                         )
         else:
             raise ValueError("User specified optimizer is not supported")
         
         Q = solver.run(problem, initial_point=Q0).point
 
-    return Q
+    U, S, V = disentangled_usv(X, Q, dis_legs, svd_legs)
+    return Q, U, S, V

@@ -55,6 +55,13 @@ def mat_to_ten(X_mat, orig_shape, row_legs):
     return X
 # -------------------------------------------- #
 
+def disentangled_usv(X, Q, dis_legs, svd_legs):
+    ''' Compute SVD across specified dimension after applying disentangler Q '''
+    QX_dis = Q @ ten_to_mat(X, dis_legs)
+    QX = mat_to_ten(QX_dis, X.shape, dis_legs)
+    QX_svd = ten_to_mat(QX, svd_legs)
+    u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
+    return u, s, v
 
 # -------------- Objective functions -------------- #
 def nuclear(Q, X, dis_legs, svd_legs, alpha, chi):
