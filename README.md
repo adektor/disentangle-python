@@ -20,7 +20,7 @@ We should make this available via pip
 For example, if `X` is a 4D NumPy array then
 
 ```python
-Q, U, S, Vh = disentangle(X, dis_legs=[0, 1], svd_legs=[0, 2], chi=4, **kwargs)
+Q, U, S, V = disentangle(X, dis_legs=[0, 1], svd_legs=[0, 2], chi=4, **kwargs)
 ```
 optimizes a unitary matrix `Q` to minimize the error of the rank-`chi` truncated SVD in the following tensor network diagram. 
 
