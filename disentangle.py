@@ -1,16 +1,132 @@
 import numpy as np
 import pymanopt
-from utilities import *
-from pymanopt.tools import diagnostics
+import pymanopt.tools
+import pymanopt.tools.diagnostics
 
 # TODO: - Printing and verbosity in alternating optimizer to be similar to the verbosity of Pymanopt
 #       - Check user-supplied objective and optimizer parameters
 #       - Return info on the performance of the optimization
 #       - Riemannian Hessian(s)
 
+# ------- Reshaping: tensor <-> matrix ------- #
+def ten_to_mat(X, row_legs):
+        ''' 
+        Reshapes a tensor X into a matrix X_mat with 
+        dimensions row_legs of X indexing the rows of X_mat. 
+
+        X: numpy array
+        row_legs: list of dimensions of X
+        '''
+
+        all_legs = list(range(X.ndim))
+        col_legs = [d for d in all_legs if d not in row_legs]
+        perm = row_legs + col_legs
+        X_perm = X.transpose(perm)
+
+        row_size = np.prod([X.shape[d] for d in row_legs])
+        col_size = np.prod([X.shape[d] for d in col_legs])
+
+        X_mat = X_perm.reshape(row_size, col_size)
+        return X_mat
+
+def mat_to_ten(X_mat, orig_shape, row_legs):
+    ''' 
+    Reconstructs a tensor from its matrix form X_mat.
+
+    X_mat: 2D numpy array (matrix)
+    orig_shape: original shape of the tensor before flattening
+    row_legs: list of dimensions that were used as rows in the matrix
+    '''
+
+    # Validate input
+    N = len(orig_shape)
+    assert X_mat.ndim == 2
+    assert all(0 <= d < N for d in row_legs)
+    
+    # Compute complement dimensions (col_legs)
+    all_legs = list(range(N))
+    col_legs = [d for d in all_legs if d not in row_legs]
+    
+    # Get sizes of row and column dimensions
+    row_shape = [orig_shape[d] for d in row_legs]
+    col_shape = [orig_shape[d] for d in col_legs]
+
+    # Reshape into full tensor with permuted dimensions
+    full_shape = row_shape + col_shape
+    X_perm = X_mat.reshape(full_shape)
+
+    # Invert permutation
+    perm = row_legs + col_legs
+    inv_perm = np.argsort(perm)
+    X = X_perm.transpose(inv_perm)
+
+    return X
+# -------------------------------------------- #
+
+def disentangled_usv(X, Q, dis_legs, svd_legs):
+    ''' Compute SVD across specified dimension after applying disentangler Q '''
+    QX_dis = Q @ ten_to_mat(X, dis_legs)
+    QX = mat_to_ten(QX_dis, X.shape, dis_legs)
+    QX_svd = ten_to_mat(QX, svd_legs)
+    u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
+    return u, s, v
+
+# -------------- Objective functions -------------- #
+def nuclear(Q, X, dis_legs, svd_legs, alpha, chi):
+    X_dis = ten_to_mat(X, dis_legs)
+    QX = mat_to_ten(Q@X_dis, X.shape, dis_legs)
+    QX_svd = ten_to_mat(QX, svd_legs)
+    u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
+    
+    cost = np.sum(s)
+    ds = np.ones_like(s)
+    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
+
+    return cost, egrad
+
+def renyi(Q, X, dis_legs, svd_legs, alpha, chi):
+    X_dis = ten_to_mat(X, dis_legs)
+    QX = mat_to_ten(Q@X_dis, X.shape, dis_legs)
+    QX_svd = ten_to_mat(QX, svd_legs)
+    u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
+
+    cost = 1/(1-alpha)*np.log(np.sum(s**(2*alpha)))
+
+    fac = 2*alpha/(1-alpha)/np.sum(s**(2*alpha))
+    ds = fac*s**(2*alpha - 1)
+    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
+    
+    return cost, egrad
+
+def trunc_error(Q, X, dis_legs, svd_legs, alpha, chi):
+    X_dis = ten_to_mat(X, dis_legs)
+    QX = mat_to_ten(Q@X_dis, X.shape, dis_legs)
+    QX_svd = ten_to_mat(QX, svd_legs)
+    u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
+
+    cost = np.sum(s[chi:]**2)
+    ds = np.hstack([np.zeros(chi), 2*s[chi:]])
+    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
+
+    return cost, egrad
+
+def von_neumann(Q, X, dis_legs, svd_legs, alpha, chi):
+    X_dis = ten_to_mat(X, dis_legs)
+    QX = mat_to_ten(Q@X_dis, X.shape, dis_legs)
+    QX_svd = ten_to_mat(QX, svd_legs)
+    u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
+
+    cost = -2*np.sum(s**2*np.log(s))
+    ds = -2*s*(np.log(s**2) + 1)
+    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
+
+    return cost, egrad
+# ------------------------------------------------- #
+
+
 def disentangle(X, dis_legs, svd_legs,
                 initial="identity",
-                max_iterations=500,
+                max_iterations=1000,
                 min_grad_norm=1e-6,
                 max_time=1e100,
                 optimizer="rCG",
@@ -80,7 +196,7 @@ def disentangle(X, dis_legs, svd_legs,
     # optimizer parameters
 
     # ---------------- Alternating optimizer ---------------- #
-    if optimizer == "alternating":
+    if optimizer.lower() in {"alternating", "alt"}:
         Q = Q0
         cost = [np.linalg.norm(s0[chi:])]
         for i in range(max_iterations):
@@ -165,24 +281,22 @@ def disentangle(X, dis_legs, svd_legs,
                                    euclidean_hessian=ehess
                                    )
         if check_grad:
-            diagnostics.check_gradient(problem)
+            pymanopt.tools.diagnostics.check_gradient(problem)
         if check_hess:
-            diagnostics.check_hessian(problem)
+            pymanopt.tools.diagnostics.check_hessian(problem)
         
-        if optimizer=="rCG":
-            solver = pymanopt.optimizers.ConjugateGradient(max_iterations=max_iterations, 
-                                                        max_time=max_time, 
-                                                        min_gradient_norm=min_grad_norm, 
-                                                        verbosity=verbosity
-                                                        )
-        elif optimizer=="rSD":
-            solver = pymanopt.optimizers.SteepestDescent(max_iterations=max_iterations, 
-                                                        max_time=max_time, 
-                                                        min_gradient_norm=min_grad_norm, 
-                                                        verbosity=verbosity
-                                                        )
+        optimizer_args = dict(max_iterations=max_iterations,
+                              max_time=max_time,
+                              min_gradient_norm=min_grad_norm,
+                              verbosity=verbosity
+                              )
+        
+        if optimizer.lower() in {"rcg", "cg", "conjgrad", "conj_grad", "conjugate_gradient", "conjugategradient"}:
+            solver = pymanopt.optimizers.ConjugateGradient(**optimizer_args)
+        elif optimizer.lower() in {"rsd", "sd", "steepest_descent", "steepestdescent"}:
+            solver = pymanopt.optimizers.SteepestDescent(**optimizer_args)
         else:
-            raise ValueError("User specified optimizer is not supported")
+            raise ValueError("User specified optimizer is not recognized")
         
         Q = solver.run(problem, initial_point=Q0).point
 
