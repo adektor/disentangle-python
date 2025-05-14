@@ -1,6 +1,12 @@
 # Tensor Disentangler
 
-Disentangling is important for many tensor network algorithms. This repository provides functionality for optimizing unitary disentangler matrices to reduce entanglement across specified dimensions of a input tensor. The user provides the tensor, legs of the tensor on which the unitary matrix is applied, and legs across which the entanglement is minimized. 
+tensor-disentangler is a Python package that optimizes 'disentangling' unitary matrices to reduce bond-dimension in a given tensors. It is designed to be used in tensor network algorithms for quantum many-body calculations and beyond. For example, disentangling is important for tensor network renormalization, isometric tensor network states, MERA, purified mixed-state MPS, and unitary tensor networks. 
+
+The user provides the tensor, dimensions of the tensor on which the unitary matrix is applied, and dimensions across which entanglement is minimized. 
+
+## Installation 
+
+We should make this available via pip
 
 ## Usage
 
@@ -21,7 +27,10 @@ optimizes a unitary matrix `Q` to minimize the error of the rank-`chi` truncated
 <img src="images/dis_4ten.svg" alt="Disentangling Diagram" width="400"/>
 
 The user can specify additional keyword arguments, such as:
-- Optimization algorithm
-- Maximum wall time for disentangling
-- Initial disentangler guess
+- Optimization algorithm: Alternating lineary method, Riemannian Conjugate Gradient, Riemannian Steepest Descent, and more
+- Optimization objective function: Renyi entropy, Von-Neumann entropy, or truncation error
+- Initial disentangler
+- Maximum wall time and other stopping criteria
 - Other advanced options
+
+## Features
