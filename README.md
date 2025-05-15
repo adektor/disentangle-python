@@ -34,4 +34,4 @@ The optimizer, objective function, and other options can be specified with keywo
 - Initial disentangler: identity, random, or user-supplied
 - Maximum wall time and other optimizer specific stopping criteria
 - Other advanced options
-- 
+  
