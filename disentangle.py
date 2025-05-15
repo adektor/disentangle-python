@@ -120,6 +120,22 @@ def nuclear(Q, X, dis_legs, svd_legs, alpha, chi):
     return cost, egrad
 
 def renyi(Q, X, dis_legs, svd_legs, alpha, chi):
+    ''' Renyi entropy objective function
+    Args
+    ----
+    Q        : disentangler
+    X        : NumPy array to be disentangled
+    dis_legs : dimensions of X on which Q acts
+    svd_legs : dimensions indicating which reshaping of X is SVD
+    alpha    : parameter
+    chi      : parameter (not used)
+
+    Returns
+    -------
+    cost  : objective function value
+    egrad : Euclidean gradient of objective function wrt Q
+    '''
+
     X_dis = ten_to_mat(X, dis_legs)
     QX = mat_to_ten(Q@X_dis, X.shape, dis_legs)
     QX_svd = ten_to_mat(QX, svd_legs)
@@ -134,6 +150,22 @@ def renyi(Q, X, dis_legs, svd_legs, alpha, chi):
     return cost, egrad
 
 def trunc_error(Q, X, dis_legs, svd_legs, alpha, chi):
+    ''' Truncation error objective function (sum of trailing singular values squared)
+    Args
+    ----
+    Q        : disentangler
+    X        : NumPy array to be disentangled
+    dis_legs : dimensions of X on which Q acts
+    svd_legs : dimensions indicating which reshaping of X is SVD
+    alpha    : parameter (not used)
+    chi      : parameter - truncation rank
+
+    Returns
+    -------
+    cost  : objective function value
+    egrad : Euclidean gradient of objective function wrt Q
+    '''
+
     X_dis = ten_to_mat(X, dis_legs)
     QX = mat_to_ten(Q@X_dis, X.shape, dis_legs)
     QX_svd = ten_to_mat(QX, svd_legs)
@@ -146,6 +178,22 @@ def trunc_error(Q, X, dis_legs, svd_legs, alpha, chi):
     return cost, egrad
 
 def von_neumann(Q, X, dis_legs, svd_legs, alpha, chi):
+    ''' Von-Neumann entropy objective function
+    Args
+    ----
+    Q        : disentangler
+    X        : NumPy array to be disentangled
+    dis_legs : dimensions of X on which Q acts
+    svd_legs : dimensions indicating which reshaping of X is SVD
+    alpha    : parameter (not used)
+    chi      : parameter (not used)
+
+    Returns
+    -------
+    cost  : objective function value
+    egrad : Euclidean gradient of objective function wrt Q
+    '''
+    
     X_dis = ten_to_mat(X, dis_legs)
     QX = mat_to_ten(Q@X_dis, X.shape, dis_legs)
     QX_svd = ten_to_mat(QX, svd_legs)
@@ -184,15 +232,15 @@ def disentangle(X, dis_legs, svd_legs,
     
     Kwargs
     ------
-    initial="identity" : initial disentangler, user can specify "random" or 2D NumPy array with compatible dimensions
-    max_iterations=500 : maximum number of iterations of the selected optimizer
-    min_dQ             : termination threshold for change in Q in alternating optimizer
-    min_grad_norm=1e-6 : termination threshold for norm of the gradient
-    max_time=1e100     : maximum optimizer run time in seconds
-    optimizer="rCG"    : default "rCG"=Riemannian Conjugate Gradient
-    objective=renyi    : objective function to optimize
-    alpha=0.5          : parameter for renyi entropy
-    chi=0              : parameter for trunc_error objective
+    initial="identity"  : initial disentangler, user can specify "random" or 2D NumPy array with compatible dimensions
+    max_iterations=1000 : maximum number of iterations of the selected optimizer
+    min_dQ=1e-6         : termination threshold for change in Q in alternating optimizer
+    min_grad_norm=1e-6  : termination threshold for norm of the gradient
+    max_time=1e100      : maximum optimizer run time in seconds
+    optimizer="rCG"     : default "rCG"=Riemannian Conjugate Gradient
+    objective=renyi     : objective function to optimize
+    alpha=0.5           : parameter for renyi entropy
+    chi=0               : parameter for trunc_error objective
     verbosity=0
     
     Temporary Args (for debugging)
