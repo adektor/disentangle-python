@@ -21,7 +21,7 @@ For example, if `X` is a 4D NumPy array then
 ```python
 Q, U, S, V = disentangle(X, dis_legs=[0, 1], svd_legs=[0, 2], **kwargs)
 ```
-optimizes a unitary matrix `Q` to minimize the error of the truncated SVD in the tensor network diagram
+optimizes a unitary matrix `Q` to minimize the error when truncating the SVD in the following tensor network diagram
 
 <img src="images/dis_4ten.svg" alt="Disentangling Diagram" width="400"/>
 
