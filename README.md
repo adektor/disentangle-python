@@ -30,6 +30,6 @@ optimizes a unitary matrix `Q` to minimize the error of the truncated SVD in the
 The user can specify several keyword arguments. For a comprehensive list we should write some documentation. 
 - Optimization algorithm: Alternating, Riemannian Conjugate Gradient, Riemannian Steepest Descent, and more
 - Optimization objective function: Renyi entropy, Von-Neumann entropy, or truncation error
-- Initial disentangler
-- Maximum wall time and other stopping criteria
+- Initial disentangler: identity, random, or user-supplied
+- Maximum wall time and other optimizer specific stopping criteria
 - Other advanced options
