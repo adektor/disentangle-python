@@ -1,6 +1,6 @@
 # Tensor Disentangler
 
-tensor-disentangler is a Python package that optimizes 'disentangling' unitary matrices to reduce bond-dimension in a given tensor. It is designed to be used in tensor network algorithms for quantum many-body calculations and beyond. For example, disentangling is important for tensor network renormalization, isometric tensor network states, MERA, purified mixed-state MPS, and unitary tensor networks. 
+tensor-disentangler is a Python package that optimizes 'disentangling' unitary matrices to reduce bond-dimension in a given tensor. It is built on Pymanopt and designed for use tensor network algorithms for quantum many-body calculations and beyond. For example, disentangling is important for tensor network renormalization, isometric tensor network states, MERA, purified mixed-state MPS, and unitary tensor networks. 
 
 The user provides the tensor, dimensions of the tensor on which the unitary matrix is applied, and dimensions across which entanglement is minimized. 
 
