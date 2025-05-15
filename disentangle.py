@@ -3,38 +3,44 @@ import pymanopt
 import time
 
 # TODO:
-#       
 #       - Return info on the performance of the optimization
 #       - Riemannian Hessian(s)
 
 # ------- Reshaping: tensor <-> matrix ------- #
 def ten_to_mat(X, row_legs):
-        ''' 
-        Reshapes a tensor X into a matrix X_mat with 
-        dimensions row_legs of X indexing the rows of X_mat. 
+    ''' Reshapes a tensor X into a matrix X_mat with dimensions row_legs of X indexing the rows of X_mat. 
+    Args
+    ----
+    X        : ND NumPy array
+    row_legs : list of dimensions of X to use as rows in flattening
 
-        X: numpy array
-        row_legs: list of dimensions of X
-        '''
+    Returns
+    -------
+    X_mat : 2D NumPy array (matrix) flattening of X
+    '''
 
-        all_legs = list(range(X.ndim))
-        col_legs = [d for d in all_legs if d not in row_legs]
-        perm = row_legs + col_legs
-        X_perm = X.transpose(perm)
+    all_legs = list(range(X.ndim))
+    col_legs = [d for d in all_legs if d not in row_legs]
+    perm = row_legs + col_legs
+    X_perm = X.transpose(perm)
 
-        row_size = np.prod([X.shape[d] for d in row_legs])
-        col_size = np.prod([X.shape[d] for d in col_legs])
+    row_size = np.prod([X.shape[d] for d in row_legs])
+    col_size = np.prod([X.shape[d] for d in col_legs])
 
-        X_mat = X_perm.reshape(row_size, col_size)
-        return X_mat
+    X_mat = X_perm.reshape(row_size, col_size)
+    return X_mat
 
 def mat_to_ten(X_mat, orig_shape, row_legs):
-    ''' 
-    Reconstructs a tensor from its matrix form X_mat.
+    ''' Reconstructs a tensor from its matrix form X_mat.
+    Args
+    ----
+    X_mat      : 2D NumPy array (matrix)
+    orig_shape : original shape of the tensor before flattening
+    row_legs   : list of dimensions that were used as rows in the matrix
 
-    X_mat: 2D numpy array (matrix)
-    orig_shape: original shape of the tensor before flattening
-    row_legs: list of dimensions that were used as rows in the matrix
+    Returns
+    -------
+    X : ND NumPy array (tensor)
     '''
 
     # Validate input
@@ -63,7 +69,21 @@ def mat_to_ten(X_mat, orig_shape, row_legs):
 # -------------------------------------------- #
 
 def disentangled_usv(X, Q, dis_legs, svd_legs):
-    ''' Compute SVD across specified dimension after applying disentangler Q '''
+    ''' Compute SVD across specified dimension after applying disentangler Q. 
+    Args
+    ----
+    X        : NumPy array to be disentangled
+    Q        : disentangler
+    dis_legs : dimensions of X on which Q acts
+    svd_legs : dimensions indicating which reshaping of X is SVD
+
+    Returns
+    -------
+    u : left SVD factor of shape m x chi, where m = X[svd_legs[0]]*...*X[svd_legs[-1]]
+    s : vector of chi singular values
+    v : right SVD factor of shape chi x n, where n is the product of remaining dimensions of X
+    '''
+    
     QX_dis = Q @ ten_to_mat(X, dis_legs)
     QX = mat_to_ten(QX_dis, X.shape, dis_legs)
     QX_svd = ten_to_mat(QX, svd_legs)
@@ -72,6 +92,22 @@ def disentangled_usv(X, Q, dis_legs, svd_legs):
 
 # -------------- Objective functions -------------- #
 def nuclear(Q, X, dis_legs, svd_legs, alpha, chi):
+    ''' Nuclear norm objective function (sum of singular values)
+    Args
+    ----
+    Q        : disentangler
+    X        : NumPy array to be disentangled
+    dis_legs : dimensions of X on which Q acts
+    svd_legs : dimensions indicating which reshaping of X is SVD
+    alpha    : parameter (not used)
+    chi      : parameter (not used)
+
+    Returns
+    -------
+    cost  : objective function value
+    egrad : Euclidean gradient of objective function wrt Q
+    '''
+
     X_dis = ten_to_mat(X, dis_legs)
     QX = mat_to_ten(Q@X_dis, X.shape, dis_legs)
     QX_svd = ten_to_mat(QX, svd_legs)
@@ -140,14 +176,14 @@ def disentangle(X, dis_legs, svd_legs,
     Optimize a unitary matrix Q that contracts with dis_legs of X
     to minimize the entanglement across matrix with rows indexed by svd_legs. 
 
-    Required Inputs:
-    ---------------
+    Required Args
+    -------------
     X        : NumPy array
     dis_legs : list of dimensions indicating legs the disentangler is applied to
     svd_legs : list of dimensions indicating legs for disentangling
     
-    Optional Inputs:
-    ---------------
+    Kwargs
+    ------
     initial="identity" : initial disentangler, user can specify "random" or 2D NumPy array with compatible dimensions
     max_iterations=500 : maximum number of iterations of the selected optimizer
     min_dQ             : termination threshold for change in Q in alternating optimizer
@@ -159,8 +195,8 @@ def disentangle(X, dis_legs, svd_legs,
     chi=0              : parameter for trunc_error objective
     verbosity=0
     
-    Temporary Inputs (for debugging):
-    --------------------------------
+    Temporary Args (for debugging)
+    ------------------------------
     check_grad=False
     check_hess=False
     '''

@@ -22,7 +22,7 @@ Qr, Ur, Sr, Vr = disentangle(X, dis_legs, svd_legs,
                   optimizer="rCG",
                   objective=renyi,
                   min_grad_norm=1e-12,
-                  max_iterations=4,
+                  max_iterations=1500,
                   alpha=0.5,
                   verbosity=1
                   )
@@ -32,8 +32,8 @@ Qa, Ua, Sa, Va = disentangle(X, dis_legs, svd_legs,
                   optimizer="alternating", 
                   objective=trunc_error,
                   min_dQ=1e-12,
-                  max_iterations=4,
-                  chi=40,
+                  max_iterations=500,
+                  chi=16,
                   verbosity=1
                   )
 
