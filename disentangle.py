@@ -2,8 +2,8 @@ import numpy as np
 import pymanopt
 import time
 
-# TODO: - Printing and verbosity in alternating optimizer to be similar to the verbosity of Pymanopt
-#       - Check user-supplied objective and optimizer parameters
+# TODO:
+#       
 #       - Return info on the performance of the optimization
 #       - Riemannian Hessian(s)
 
@@ -126,6 +126,7 @@ def von_neumann(Q, X, dis_legs, svd_legs, alpha, chi):
 def disentangle(X, dis_legs, svd_legs,
                 initial="identity",
                 max_iterations=1000,
+                min_dQ=1e-6,
                 min_grad_norm=1e-6,
                 max_time=1e100,
                 optimizer="rCG",
@@ -149,9 +150,10 @@ def disentangle(X, dis_legs, svd_legs,
     ---------------
     initial="identity" : initial disentangler, user can specify "random" or 2D NumPy array with compatible dimensions
     max_iterations=500 : maximum number of iterations of the selected optimizer
+    min_dQ             : termination threshold for change in Q in alternating optimizer
     min_grad_norm=1e-6 : termination threshold for norm of the gradient
     max_time=1e100     : maximum optimizer run time in seconds
-    optimizer="CG"     : default "rCG"=Riemannian Conjugate Gradient
+    optimizer="rCG"    : default "rCG"=Riemannian Conjugate Gradient
     objective=renyi    : objective function to optimize
     alpha=0.5          : parameter for renyi entropy
     chi=0              : parameter for trunc_error objective
@@ -196,10 +198,18 @@ def disentangle(X, dis_legs, svd_legs,
 
     # ---------------- Alternating optimizer ---------------- #
     if optimizer.lower() in {"alternating", "alt"}:
+        if verbosity>0:
+            print("\nAlternating optimizer")
+            print("Optimizing...")
+        if verbosity>1:
+            print("{:<10}  {:<25}  {:<15}".format("Iteration", "Cost", "Gradient norm"))
+            print("{:<10}  {:<25}  {:<15}".format("--------", "-------------------------", "--------------"))
+
         start_time = time.time()
 
         Q = Q0
         cost = [np.linalg.norm(s0[chi:])]
+        dQ = []
         for i in range(max_iterations):
             X_dis = ten_to_mat(X, dis_legs)
             QX_dis = Q @ X_dis
@@ -215,19 +225,31 @@ def disentangle(X, dis_legs, svd_legs,
 
             M = ten_to_mat(QX_chi, dis_legs) @ (X_dis.T)
             u, _, v = np.linalg.svd(M, full_matrices=False)
-            Q = u@v
-            
-            if i>0 and np.abs(cost[-1]-cost[-2]) < min_grad_norm:
-                print("min_grad_norm reached at iteration {0} in alternating optimizer. Exiting".format(i))
-                break
+            Qnew = u@v
+            dQ.append(np.linalg.norm(Qnew-Q))
+            Q = Qnew
 
+            if verbosity>1:
+                print("{:<10d}  {:+.16e}  {:.8e}".format(i, cost[-1], dQ[-1]))
+
+            # stopping conditions:
             elapsed_time = time.time() - start_time
             if elapsed_time > max_time:
-                print("Time limit reached in alternating optimizer. Exiting.")
+                if verbosity>0:
+                    print("Terminated - Time limit reached in alternating optimizer. Exiting.")
                 break
+            if i>0 and dQ[-1]<min_dQ:
+                if verbosity>0:
+                    print("Terminated - min_dQ reached after {0} iterations, {1:.2f} seconds.".format(i, elapsed_time))
+                break
+
+        if verbosity>0 and i==max_iterations-1:
+            print("Terminated - max iterations reached after {0} seconds".format(elapsed_time))
 
     # ---------------- Riemannian optimizer ---------------- #
     else:
+        if verbosity>0:
+            print("\nRiemannian optimizer")
         manifold = pymanopt.manifolds.Stiefel(n, n)
 
         @pymanopt.function.numpy(manifold)

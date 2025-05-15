@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from disentangle import *
 
 # Define a tensor
-X = np.random.rand(12,12,12,12)
+X = np.random.rand(8,8,8,8)
 
 # We will apply the disentangler to dimensions (or legs) 0,1 of X
 dis_legs = [0, 1]
@@ -19,16 +19,22 @@ U0, S0, V0 = disentangled_usv(X, Qeye, dis_legs, svd_legs)
 
 # Optimize a disentangler Q by minimizing Renyi-1/2 entropy with Riemannian-CG:
 Qr, Ur, Sr, Vr = disentangle(X, dis_legs, svd_legs, 
-                  optimizer="rCG", 
+                  optimizer="rCG",
                   objective=renyi,
+                  min_grad_norm=1e-12,
+                  max_iterations=4,
                   alpha=0.5,
+                  verbosity=1
                   )
 
-# Let's compare with a second disentangler optimized for rank-30 truncation error using the alternating optimizer
+# Let's compare with a second disentangler optimized for truncation error using the alternating optimizer
 Qa, Ua, Sa, Va = disentangle(X, dis_legs, svd_legs, 
                   optimizer="alternating", 
                   objective=trunc_error,
-                  chi=60,
+                  min_dQ=1e-12,
+                  max_iterations=4,
+                  chi=40,
+                  verbosity=1
                   )
 
 # plot results
