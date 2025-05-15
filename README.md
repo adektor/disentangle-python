@@ -26,10 +26,12 @@ optimizes a unitary matrix `Q` to minimize the error of the truncated SVD in the
 <img src="images/dis_4ten.svg" alt="Disentangling Diagram" width="400"/>
 
 ## Features
+tensor-disentangler has support for various optimizers and objective functions for disentangling. 
+The optimizer, objective function, and other options can be specified with keyword arguments. For a comprehensive list we should write some documentation. 
 
-The user can specify several keyword arguments. For a comprehensive list we should write some documentation. 
 - Optimization algorithm: Alternating, Riemannian Conjugate Gradient, Riemannian Steepest Descent, and more
 - Optimization objective function: Renyi entropy, Von-Neumann entropy, or truncation error
 - Initial disentangler: identity, random, or user-supplied
 - Maximum wall time and other optimizer specific stopping criteria
 - Other advanced options
+- 
