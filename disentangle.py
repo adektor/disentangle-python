@@ -276,22 +276,28 @@ def disentangle(X, dis_legs, svd_legs,
 
     # possible mistakes in user-selected objectives and parameters
     if objective==renyi and chi != 0:
-        warnings.warn("truncation rank 'chi' is not used in 'renyi' objective function", UserWarning)
+        warnings.warn("user-provided truncation rank 'chi' is not used in 'renyi' objective function", UserWarning)
 
-    if objective==trunc_error and alpha != 0.5:
-        warnings.warn("parameter 'alpha' is not used in 'trunc_error' objective function", UserWarning)
+    if objective==trunc_error:
+        if alpha != 0.5:
+            warnings.warn("user-provided parameter 'alpha' is not used in 'trunc_error' objective function", UserWarning)
+        if chi<0:
+            raise ValueError("user-provided truncation rank 'chi' must be positive")
+        if not isinstance(chi, int):
+            warnings.warn("user-provided truncation rank is a float... rounding to int", UserWarning)
+            chi = round(chi)
 
     if objective==von_neumann:
         if chi !=0:
-            warnings.warn("parameter 'chi' is not used in 'von_neumann' objective function", UserWarning)
+            warnings.warn("user-provided parameter 'chi' is not used in 'von_neumann' objective function", UserWarning)
         if alpha != 0.5:
-            warnings.warn("parameter 'alpha' is not used in 'von_neumann' objective function", UserWarning)
+            warnings.warn("user-provided parameter 'alpha' is not used in 'von_neumann' objective function", UserWarning)
 
     # ---------------- Alternating optimizer ---------------- #
     if optimizer.lower() in {"alternating", "alt"}:
         # check if the user specified incorrect or irrelevant parameters
         if min_grad_norm != 1e-6:
-            warnings.warn("parameter 'min_grad_norm' is not used in alternating optimizer", UserWarning)
+            warnings.warn("user-provided parameter 'min_grad_norm' is not used in alternating optimizer", UserWarning)
         if objective != trunc_error:
             warnings.warn("alternating optimizer only supports 'trunc_error' objective", UserWarning)
         if chi == 0:
@@ -348,8 +354,8 @@ def disentangle(X, dis_legs, svd_legs,
     # ---------------- Riemannian optimizer ---------------- #
     else:
         # check if the user specified irrelevant parameters
-        if dQ != 1e-6:
-            warnings.warn("parameter 'dQ' is not used in Riemannian optimizers", UserWarning)
+        if min_dQ != 1e-6:
+            warnings.warn("user-provided parameter 'dQ' is not used in Riemannian optimizers", UserWarning)
 
         if verbosity>0:
             print("\nRiemannian optimizer")

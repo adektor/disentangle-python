@@ -33,7 +33,7 @@ Qa, Ua, Sa, Va = disentangle(X, dis_legs, svd_legs,
                   objective=trunc_error,
                   min_dQ=1e-12,
                   max_iterations=500,
-                  chi=0,
+                  chi=1.3,
                   verbosity=1
                   )
 
