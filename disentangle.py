@@ -1,14 +1,16 @@
 import numpy as np
 import pymanopt
 import time
+import warnings
 
 # TODO:
 #       - Return info on the performance of the optimization
 #       - Riemannian Hessian(s)
+#       - orthogonal -> unitary
 
 # ------- Reshaping: tensor <-> matrix ------- #
 def ten_to_mat(X, row_legs):
-    ''' Reshapes a tensor X into a matrix X_mat with dimensions row_legs of X indexing the rows of X_mat. 
+    ''' Reshapes a tensor X into a matrix X_mat with dimensions row_legs of X indexing the rows of X_mat
     Args
     ----
     X        : ND NumPy array
@@ -31,7 +33,7 @@ def ten_to_mat(X, row_legs):
     return X_mat
 
 def mat_to_ten(X_mat, orig_shape, row_legs):
-    ''' Reconstructs a tensor from its matrix form X_mat.
+    ''' Reconstructs a tensor from its matrix form X_mat
     Args
     ----
     X_mat      : 2D NumPy array (matrix)
@@ -69,7 +71,7 @@ def mat_to_ten(X_mat, orig_shape, row_legs):
 # -------------------------------------------- #
 
 def disentangled_usv(X, Q, dis_legs, svd_legs):
-    ''' Compute SVD across specified dimension after applying disentangler Q. 
+    ''' Compute SVD across specified dimension after applying disentangler Q
     Args
     ----
     X        : NumPy array to be disentangled
@@ -193,7 +195,7 @@ def von_neumann(Q, X, dis_legs, svd_legs, alpha, chi):
     cost  : objective function value
     egrad : Euclidean gradient of objective function wrt Q
     '''
-    
+
     X_dis = ten_to_mat(X, dis_legs)
     QX = mat_to_ten(Q@X_dis, X.shape, dis_legs)
     QX_svd = ten_to_mat(QX, svd_legs)
@@ -241,7 +243,7 @@ def disentangle(X, dis_legs, svd_legs,
     objective=renyi     : objective function to optimize
     alpha=0.5           : parameter for renyi entropy
     chi=0               : parameter for trunc_error objective
-    verbosity=0
+    verbosity=0         : 1 print before and after optimization, 2 print every iteration of optimizer
     
     Temporary Args (for debugging)
     ------------------------------
@@ -272,16 +274,29 @@ def disentangle(X, dis_legs, svd_legs,
     else:
         raise TypeError("Initial disentangler must be 'identity', 'random', or a 2D NumPy array with compatible dimensions.")
 
-    # objective parameters
-    # Here we can check for possible mistakes when selecting combinations of objectives and parameters. 
-    # For example, if the user specifies Renyi objective and also specifies truncation rank chi. 
-    # Or if the user specifies trunc_error objective and also specifies an alpha...
-    # Are there other combinations that the user should be warned of? 
+    # possible mistakes in user-selected objectives and parameters
+    if objective==renyi and chi != 0:
+        warnings.warn("truncation rank 'chi' is not used in 'renyi' objective function", UserWarning)
 
-    # optimizer parameters
+    if objective==trunc_error and alpha != 0.5:
+        warnings.warn("parameter 'alpha' is not used in 'trunc_error' objective function", UserWarning)
+
+    if objective==von_neumann:
+        if chi !=0:
+            warnings.warn("parameter 'chi' is not used in 'von_neumann' objective function", UserWarning)
+        if alpha != 0.5:
+            warnings.warn("parameter 'alpha' is not used in 'von_neumann' objective function", UserWarning)
 
     # ---------------- Alternating optimizer ---------------- #
     if optimizer.lower() in {"alternating", "alt"}:
+        # check if the user specified incorrect or irrelevant parameters
+        if min_grad_norm != 1e-6:
+            warnings.warn("parameter 'min_grad_norm' is not used in alternating optimizer", UserWarning)
+        if objective != trunc_error:
+            warnings.warn("alternating optimizer only supports 'trunc_error' objective", UserWarning)
+        if chi == 0:
+            warnings.warn("For best results, set chi>0 in alternating optimizer", UserWarning)
+
         if verbosity>0:
             print("\nAlternating optimizer")
             print("Optimizing...")
@@ -332,6 +347,10 @@ def disentangle(X, dis_legs, svd_legs,
 
     # ---------------- Riemannian optimizer ---------------- #
     else:
+        # check if the user specified irrelevant parameters
+        if dQ != 1e-6:
+            warnings.warn("parameter 'dQ' is not used in Riemannian optimizers", UserWarning)
+
         if verbosity>0:
             print("\nRiemannian optimizer")
         manifold = pymanopt.manifolds.Stiefel(n, n)
