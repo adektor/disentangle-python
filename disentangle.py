@@ -4,7 +4,6 @@ import time
 import warnings
 
 # TODO:
-#       - Return info on the performance of the optimization
 #       - Riemannian Hessian(s)
 #       - orthogonal -> unitary
 
@@ -220,6 +219,7 @@ def disentangle(X, dis_legs, svd_legs,
                 alpha=0.5,
                 chi=0,
                 verbosity=0,
+                return_log=False,
                 check_grad=False,
                 check_hess=False):
     '''
@@ -244,6 +244,7 @@ def disentangle(X, dis_legs, svd_legs,
     alpha=0.5           : parameter for renyi entropy
     chi=0               : parameter for trunc_error objective
     verbosity=0         : 1 print before and after optimization, 2 print every iteration of optimizer
+    return_log=False    : return log of optimizer info
     
     Temporary Args (for debugging)
     ------------------------------
@@ -292,6 +293,7 @@ def disentangle(X, dis_legs, svd_legs,
             warnings.warn("user-provided parameter 'chi' is not used in 'von_neumann' objective function", UserWarning)
         if alpha != 0.5:
             warnings.warn("user-provided parameter 'alpha' is not used in 'von_neumann' objective function", UserWarning)
+
 
     # ---------------- Alternating optimizer ---------------- #
     if optimizer.lower() in {"alternating", "alt"}:
@@ -350,6 +352,13 @@ def disentangle(X, dis_legs, svd_legs,
 
         if verbosity>0 and i==max_iterations-1:
             print("Terminated - max iterations reached after {0} seconds".format(elapsed_time))
+        
+        if return_log:
+            log = {"cost_history": cost,
+                   "dQ_history"  : dQ, 
+                   "iterations"  : i,
+                   "runtime"     : elapsed_time}
+
 
     # ---------------- Riemannian optimizer ---------------- #
     else:
@@ -424,7 +433,8 @@ def disentangle(X, dis_legs, svd_legs,
         optimizer_args = dict(max_iterations=max_iterations,
                               max_time=max_time,
                               min_gradient_norm=min_grad_norm,
-                              verbosity=verbosity
+                              verbosity=verbosity,
+                              log_verbosity=return_log
                               )
         
         if optimizer.lower() in {"rcg", "cg", "conjgrad", "conj_grad", "conjugate_gradient", "conjugategradient"}:
@@ -434,7 +444,20 @@ def disentangle(X, dis_legs, svd_legs,
         else:
             raise ValueError("User specified optimizer is not recognized")
         
-        Q = solver.run(problem, initial_point=Q0).point
+        result = solver.run(problem, initial_point=Q0)
+        Q = result.point
+
+        if return_log:
+            log = {"cost_history"      : result.log["iterations"]["cost"],
+                   "gradnorm_history"  : result.log["iterations"]["gradient_norm"],
+                   "iterations"        : result.iterations,
+                   "runtime"           : result.time}
+            
+    # ------------------ end optimizers ------------------ #
 
     U, S, V = disentangled_usv(X, Q, dis_legs, svd_legs)
-    return Q, U, S, V
+
+    if return_log:
+        return Q, U, S, V, log
+    else:
+        return Q, U, S, V
