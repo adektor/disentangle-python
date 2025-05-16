@@ -3,6 +3,9 @@ import pymanopt
 import time
 import warnings
 
+import pymanopt.tools
+import pymanopt.tools.diagnostics
+
 # TODO:
 #       - Riemannian Hessian(s)
 #       - orthogonal -> unitary
@@ -177,6 +180,77 @@ def trunc_error(Q, X, dis_legs, svd_legs, alpha, chi):
     egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
 
     return cost, egrad
+
+def trunc_error_hess(Q, E, X, dis_legs, svd_legs, alpha, chi):
+    ''' Truncation error objective function (sum of trailing singular values squared)
+    Args
+    ----
+    Q        : disentangler
+    E        : matrix on which Hessian acts
+    X        : NumPy array to be disentangled
+    dis_legs : dimensions of X on which Q acts
+    svd_legs : dimensions indicating which reshaping of X is SVD
+    alpha    : parameter (not used)
+    chi      : parameter - truncation rank
+
+    Returns
+    -------
+    cost  : objective function value
+    egrad : Euclidean gradient of objective function wrt Q
+    '''
+    
+    X_dis = ten_to_mat(X, dis_legs)
+    QX = mat_to_ten(Q@X_dis, X.shape, dis_legs)
+    QX_svd = ten_to_mat(QX, svd_legs)
+    u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
+
+    m, k, n = u.shape[0], u.shape[1], v.shape[1]
+
+    dfds = np.zeros(s.shape)
+    dfds[chi:] = 2*s[chi:]
+
+    egrad = ten_to_mat(mat_to_ten(u@np.diag(dfds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
+
+    EX_dis = E@ten_to_mat(X, dis_legs)
+    AEB = ten_to_mat(mat_to_ten(EX_dis, X.shape, dis_legs), svd_legs) # = EX_svd
+
+    # F matrix (4.27)
+    F = np.zeros([len(s), len(s)])
+    for i in range(len(s)):
+        for j in range(len(s)):
+            if i == j:
+                continue
+            F[i, j] = 1/(s[j]**2 - s[i]**2)
+
+    # s_diff_matrix = (s**2)[:, None] - (s**2)[None, :]
+    # with np.errstate(divide='ignore', invalid='ignore'):
+    #     f = 1.0 / s_diff_matrix
+    #     np.fill_diagonal(f, 0.0)
+
+    # DUE = u@(f*(u.T@EX_svd@v.T@np.diag(s) + np.diag(s)@v@EX_svd.T@u)) + (np.eye(m) - u@u.T)@EX_svd@v.T@np.diag(1/s)
+    DUE = u @ (F*(u.T @ AEB @ v.T @ np.diag(s) + np.diag(s) @ v @ AEB.T @ u)) + \
+          (np.eye(m) - u @ u.T) @ AEB @ v.T @ np.diag(1/s)
+
+    d2fds2 = np.zeros(k) # a vector
+    d2fds2[chi:] = 2
+
+    Ds = np.diag(u.T @ AEB @ v.T) 
+    DdfE = d2fds2*Ds
+
+    DVE = v.T @ (F*(np.diag(s) @ u.T @ AEB @ v.T + v @ AEB.T @ u @ np.diag(s))) + \
+          (np.eye(n) - v.T @ v) @ AEB.T @ u @ np.diag(1/s)
+    
+    # DVE = v.T@(f*(np.diag(s)@u.T@EX_svd@v.T + v@EX_svd.T@u@np.diag(s))) + (np.eye(n) - v.T@v)@EX_svd.T@u@np.diag(1/s)
+    
+    Dgrad_fbar = ten_to_mat(mat_to_ten(DUE @ np.diag(dfds) @ v, X.shape, svd_legs), dis_legs) + \
+                 ten_to_mat(mat_to_ten(u @ np.diag(DdfE) @ v, X.shape, svd_legs), dis_legs) + \
+                 ten_to_mat(mat_to_ten(u @ np.diag(dfds) @ DVE.T, X.shape, svd_legs), dis_legs)
+    
+    left = Dgrad_fbar @ X_dis.T
+    right = E @ egrad.T @ Q + Q @ left.T @ Q + Q @ egrad.T @ E
+    x = 0.5*(left - right)
+    hess = 0.5*(x - Q.dot(x.T.dot(Q)))
+    return hess
 
 def von_neumann(Q, X, dis_legs, svd_legs, alpha, chi):
     ''' Von-Neumann entropy objective function
@@ -373,57 +447,17 @@ def disentangle(X, dis_legs, svd_legs,
         @pymanopt.function.numpy(manifold)
         def cost(Q):
             return objective(Q, X, dis_legs, svd_legs, alpha, chi)[0]
-        
         @pymanopt.function.numpy(manifold)
         def egrad(Q):
             return objective(Q, X, dis_legs, svd_legs, alpha, chi)[1]
-        
         @pymanopt.function.numpy(manifold)
-        def ehess(Q, E):
-        # THIS FUNCTION DOES NOT WORK, YET!
-            # The following 4 lines are also computed in cost & egrad... 
-            X_dis = ten_to_mat(X, dis_legs)
-            QX = mat_to_ten(Q@X_dis, X.shape, dis_legs)
-            QX_svd = ten_to_mat(QX, svd_legs)
-            u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
-
-            e_grad = egrad(Q)
-            # rgrad = manifold.projection(Q, e_grad)
-
-            # F matrix (4.27)
-            s_diff_matrix = (s**2)[:, None] - (s**2)[None, :]
-            with np.errstate(divide='ignore', invalid='ignore'):
-                f = 1.0 / s_diff_matrix
-                np.fill_diagonal(f, 0.0)
-
-            m, k, n = u.shape[0], u.shape[1], v.shape[1]
-            EX_dis = E@ten_to_mat(X, dis_legs)
-            EX_svd = ten_to_mat(mat_to_ten(EX_dis, X.shape, dis_legs), svd_legs)
-
-            DUE = u@(f*(u.T@EX_svd@v.T@np.diag(s) + np.diag(s)@v@EX_svd.T@u)) + (np.eye(m) - u@u.T)@EX_svd@v.T@np.diag(1/s)
-            DVE = v.T@(f*(np.diag(s)@u.T@EX_svd@v.T + v@EX_svd.T@u@np.diag(s))) + (np.eye(n) - v.T@v)@EX_svd.T@u@np.diag(1/s)
-
-            _, d_phi, dd_phi = objective(s[chi:])
-            d_phi = np.hstack([np.zeros(chi), d_phi])
-            dd_phi = np.hstack([np.zeros(chi), dd_phi])
-
-            DSE = np.diag(dd_phi)@u.T@EX_svd@v.T
-            
-            Degrad = ( ten_to_mat(mat_to_ten(DUE@np.diag(d_phi)@v, X.shape, svd_legs), dis_legs) 
-                         + ten_to_mat(mat_to_ten(u@DSE@v, X.shape, svd_legs), dis_legs) 
-                         + ten_to_mat(mat_to_ten(u@np.diag(d_phi)@DVE.T, X.shape, svd_legs), dis_legs) )
-
-            left = Degrad@X_dis.T
-            right = E@e_grad.T@Q + Q@left.T@Q + Q@e_grad.T@E
-            lr = 0.5*(left - right)
-            ehess = manifold.projection(Q, lr)
-
-            return ehess
+        def hess(Q, E):
+            return trunc_error_hess(Q, E, X, dis_legs, svd_legs, alpha, chi)
         
         problem = pymanopt.Problem(manifold=manifold, 
                                    cost=cost, 
                                    euclidean_gradient=egrad,
-                                   euclidean_hessian=ehess
+                                   riemannian_hessian=hess
                                    )
         if check_grad:
             pymanopt.tools.diagnostics.check_gradient(problem)
