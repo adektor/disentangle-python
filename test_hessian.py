@@ -13,8 +13,9 @@ U0, S0, V0 = disentangled_usv(X, Qeye, dis_legs, svd_legs)
 
 Qr, Ur, Sr, Vr, logr = disentangle(X, dis_legs, svd_legs, 
                   optimizer="cg",
-                  objective=nuclear,
+                  objective=trunc_error,
                   alpha=1/2,
+                  chi=32,
                   verbosity=1,
                   return_log=True,
                   check_grad=True,

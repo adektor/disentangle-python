@@ -498,9 +498,15 @@ def disentangle(X, dis_legs, svd_legs,
         @pymanopt.function.numpy(manifold)
         def egrad(Q):
             return objective(Q, X, dis_legs, svd_legs, alpha, chi)[1]
+        
         @pymanopt.function.numpy(manifold)
         def hess(Q, E):
-            return nuclear_hess(Q, E, X, dis_legs, svd_legs, alpha, chi)
+            if objective==nuclear:
+                return nuclear_hess(Q, E, X, dis_legs, svd_legs, alpha, chi)
+            elif objective==trunc_error:
+                return trunc_error_hess(Q, E, X, dis_legs, svd_legs, alpha, chi)
+            else:
+                warnings.warn("user-selected cost function does not have Hessian support", UserWarning)
         
         problem = pymanopt.Problem(manifold=manifold, 
                                    cost=cost, 
