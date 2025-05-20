@@ -239,6 +239,11 @@ def trunc_error(Q, X, dis_legs, svd_legs, alpha, chi):
     ds = np.hstack([np.zeros(chi), 2*s[chi:]])
     egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
 
+    # Tangent space projection
+    # Qtegrad = Q.conj().T @ egrad
+    # sym_Qtegrad = 0.5 * (Qtegrad + Qtegrad.conj().T)
+    # rgrad = egrad - Q @ sym_Qtegrad
+    
     return cost, egrad
 
 def trunc_error_hess(Q, E, X, dis_legs, svd_legs, alpha, chi):
@@ -452,7 +457,7 @@ def disentangle(X, dis_legs, svd_legs,
             QX_svd_chi = u@np.diag(s)@v
             QX_chi = mat_to_ten(QX_svd_chi, X.shape, svd_legs)
 
-            M = ten_to_mat(QX_chi, dis_legs) @ (X_dis.T)
+            M = ten_to_mat(QX_chi, dis_legs) @ (X_dis.conj().T)
             u, _, v = np.linalg.svd(M, full_matrices=False)
             Qnew = u@v
             dQ.append(np.linalg.norm(Qnew-Q))
@@ -490,7 +495,10 @@ def disentangle(X, dis_legs, svd_legs,
 
         if verbosity>0:
             print("\nRiemannian optimizer")
-        manifold = pymanopt.manifolds.Stiefel(n, n)
+        # manifold = pymanopt.manifolds.Stiefel(n, n)
+        # manifold = pymanopt.manifolds.SpecialOrthogonalGroup(n, retraction="polar")
+        manifold = pymanopt.manifolds.UnitaryGroup(n, retraction="polar")
+
 
         @pymanopt.function.numpy(manifold)
         def cost(Q):
@@ -535,6 +543,7 @@ def disentangle(X, dis_legs, svd_legs,
             raise ValueError("User specified optimizer is not recognized")
         
         result = solver.run(problem, initial_point=Q0)
+        # result = solver.run(problem)
         Q = result.point
 
         if return_log:
@@ -545,6 +554,7 @@ def disentangle(X, dis_legs, svd_legs,
             
     # ------------------ end optimizers ------------------ #
 
+    # final disentangled SVD
     U, S, V = disentangled_usv(X, Q, dis_legs, svd_legs)
 
     if return_log:
