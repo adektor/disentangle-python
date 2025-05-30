@@ -236,15 +236,15 @@ def trunc_error(Q, X, dis_legs, svd_legs, alpha, chi):
     u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
 
     cost = np.sum(s[chi:]**2)
-    ds = np.hstack([np.zeros(chi), 2*s[chi:]])
-    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
 
-    # Tangent space projection
-    # Qtegrad = Q.conj().T @ egrad
-    # sym_Qtegrad = 0.5 * (Qtegrad + Qtegrad.conj().T)
-    # rgrad = egrad - Q @ sym_Qtegrad
-    
+    ds = np.hstack([np.zeros(chi), 2*s[chi:]])
+    ds_mat = u @ np.diag(ds) @ v
+
+    dQX = ten_to_mat(mat_to_ten(ds_mat, X.shape, svd_legs), dis_legs)
+    egrad = (dQX @ X_dis.conj().T)
+
     return cost, egrad
+
 
 def trunc_error_hess(Q, E, X, dis_legs, svd_legs, alpha, chi):
     ''' Truncation error objective function (sum of trailing singular values squared)
@@ -268,10 +268,14 @@ def trunc_error_hess(Q, E, X, dis_legs, svd_legs, alpha, chi):
     QX_svd = ten_to_mat(QX, svd_legs)
     u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
     m, k, n = u.shape[0], u.shape[1], v.shape[1]
-
+    
     ds = np.hstack([np.zeros(chi), 2*s[chi:]])
-    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
+    ds_mat = u @ np.diag(ds) @ v
 
+    dQX = ten_to_mat(mat_to_ten(ds_mat, X.shape, svd_legs), dis_legs)
+    egrad = (dQX @ X_dis.conj().T)
+
+    
     EX_dis = E@ten_to_mat(X, dis_legs)
     EX_svd = ten_to_mat(mat_to_ten(EX_dis, X.shape, dis_legs), svd_legs)
 
@@ -283,27 +287,27 @@ def trunc_error_hess(Q, E, X, dis_legs, svd_legs, alpha, chi):
                 continue
             F[i, j] = 1/(s[j]**2 - s[i]**2)
 
-    DUE = u @ (F*(u.T @ EX_svd @ v.T @ np.diag(s) + np.diag(s) @ v @ EX_svd.T @ u)) + \
-          (np.eye(m) - u @ u.T) @ EX_svd @ v.T @ np.diag(1/s)
+    DUE = u @ (F*(u.T.conj() @ EX_svd @ v.T.conj() @ np.diag(s) + np.diag(s) @ v @ EX_svd.T.conj() @ u)) + \
+          (np.eye(m) - u @ u.T.conj()) @ EX_svd @ v.T.conj() @ np.diag(1/s)
 
     d2fds2 = np.zeros(k)
     d2fds2[chi:] = 2
 
-    Ds = np.diag(u.T @ EX_svd @ v.T) 
+    Ds = np.diag(u.T.conj() @ EX_svd @ v.T.conj()) 
     DdfE = d2fds2*Ds
 
-    DVE = v.T @ (F*(np.diag(s) @ u.T @ EX_svd @ v.T + v @ EX_svd.T @ u @ np.diag(s))) + \
-          (np.eye(n) - v.T @ v) @ EX_svd.T @ u @ np.diag(1/s)
+    DVE = v.T.conj() @ (F*(np.diag(s) @ u.T.conj() @ EX_svd @ v.T.conj() + v @ EX_svd.T.conj() @ u @ np.diag(s))) + \
+          (np.eye(n) - v.T.conj() @ v) @ EX_svd.T.conj() @ u @ np.diag(1/s)
     
-    Dgrad_fbar = ten_to_mat(mat_to_ten(DUE @ np.diag(ds) @ v, X.shape, svd_legs), dis_legs) + \
-                 ten_to_mat(mat_to_ten(u @ np.diag(DdfE) @ v, X.shape, svd_legs), dis_legs) + \
-                 ten_to_mat(mat_to_ten(u @ np.diag(ds) @ DVE.T, X.shape, svd_legs), dis_legs)
+    Degrad =    ten_to_mat(mat_to_ten(DUE @ np.diag(ds) @ v, X.shape, svd_legs), dis_legs) + \
+                ten_to_mat(mat_to_ten(u @ np.diag(DdfE) @ v, X.shape, svd_legs), dis_legs) + \
+                ten_to_mat(mat_to_ten(u @ np.diag(ds) @ DVE.T.conj(), X.shape, svd_legs), dis_legs)
     
-    left = Dgrad_fbar @ X_dis.T
-    right = E @ egrad.T @ Q + Q @ left.T @ Q + Q @ egrad.T @ E
-    x = 0.5*(left - right)
-    hess = 0.5*(x - Q.dot(x.T.dot(Q)))
-    return hess
+    Degrad = Degrad @ X_dis.T.conj()
+
+    right = E @ egrad.T.conj() @ Q + Q @ Degrad.T.conj() @ Q + Q @ egrad.T.conj() @ E
+    ehess = 0.5*(Degrad - right)
+    return ehess
 
 def von_neumann(Q, X, dis_legs, svd_legs, alpha, chi):
     ''' Von-Neumann entropy objective function
@@ -498,6 +502,7 @@ def disentangle(X, dis_legs, svd_legs,
         # manifold = pymanopt.manifolds.Stiefel(n, n)
         # manifold = pymanopt.manifolds.SpecialOrthogonalGroup(n, retraction="polar")
         manifold = pymanopt.manifolds.UnitaryGroup(n, retraction="polar")
+        
 
 
         @pymanopt.function.numpy(manifold)
@@ -508,7 +513,7 @@ def disentangle(X, dis_legs, svd_legs,
             return objective(Q, X, dis_legs, svd_legs, alpha, chi)[1]
         
         @pymanopt.function.numpy(manifold)
-        def hess(Q, E):
+        def ehess(Q, E):
             if objective==nuclear:
                 return nuclear_hess(Q, E, X, dis_legs, svd_legs, alpha, chi)
             elif objective==trunc_error:
@@ -519,7 +524,7 @@ def disentangle(X, dis_legs, svd_legs,
         problem = pymanopt.Problem(manifold=manifold, 
                                    cost=cost, 
                                    euclidean_gradient=egrad,
-                                   riemannian_hessian=hess
+                                   euclidean_hessian=ehess
                                    )
         if check_grad:
             pymanopt.tools.diagnostics.check_gradient(problem)
