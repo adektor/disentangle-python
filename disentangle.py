@@ -119,68 +119,9 @@ def nuclear(Q, X, dis_legs, svd_legs, alpha, chi):
     
     cost = np.sum(s)
     ds = np.ones_like(s)
-    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
+    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T.conj())
 
     return cost, egrad
-
-def nuclear_hess(Q, E, X, dis_legs, svd_legs, alpha, chi):
-    ''' Truncation error objective function (sum of trailing singular values squared)
-    Args
-    ----
-    Q        : disentangler
-    E        : matrix on which Hessian acts
-    X        : NumPy array to be disentangled
-    dis_legs : dimensions of X on which Q acts
-    svd_legs : dimensions indicating which reshaping of X is SVD
-    alpha    : parameter (not used)
-    chi      : parameter - truncation rank
-
-    Returns
-    -------
-    hess  : Riemannian hessian at Q applied to E
-    '''
-    
-    X_dis = ten_to_mat(X, dis_legs)
-    QX = mat_to_ten(Q@X_dis, X.shape, dis_legs)
-    QX_svd = ten_to_mat(QX, svd_legs)
-    u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
-    m, k, n = u.shape[0], u.shape[1], v.shape[1]
-
-    ds = 2*alpha*(s**(2*alpha-1))
-    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
-
-    EX_dis = E@ten_to_mat(X, dis_legs)
-    EX_svd = ten_to_mat(mat_to_ten(EX_dis, X.shape, dis_legs), svd_legs)
-
-    # F matrix (4.27)
-    F = np.zeros([len(s), len(s)])
-    for i in range(len(s)):
-        for j in range(len(s)):
-            if i == j:
-                continue
-            F[i, j] = 1/(s[j]**2 - s[i]**2)
-
-    DUE = u @ (F*(u.T @ EX_svd @ v.T @ np.diag(s) + np.diag(s) @ v @ EX_svd.T @ u)) + \
-          (np.eye(m) - u @ u.T) @ EX_svd @ v.T @ np.diag(1/s)
-
-
-    d2fds2 = (2*alpha-1)*2*alpha*(s**(2*alpha-2))
-
-    Ds = np.diag(u.T @ EX_svd @ v.T) 
-    DdfE = d2fds2*Ds
-
-    DVE = v.T @ (F*(np.diag(s) @ u.T @ EX_svd @ v.T + v @ EX_svd.T @ u @ np.diag(s))) + \
-          (np.eye(n) - v.T @ v) @ EX_svd.T @ u @ np.diag(1/s)
-    
-    Dgrad_fbar = ten_to_mat(mat_to_ten(DUE @ np.diag(ds) @ v, X.shape, svd_legs), dis_legs) + \
-                 ten_to_mat(mat_to_ten(u @ np.diag(DdfE) @ v, X.shape, svd_legs), dis_legs) + \
-                 ten_to_mat(mat_to_ten(u @ np.diag(ds) @ DVE.T, X.shape, svd_legs), dis_legs)
-    
-    left = Dgrad_fbar @ X_dis.T
-    right = E @ egrad.T @ Q + Q @ left.T @ Q + Q @ egrad.T @ E
-    x = 0.5*(left - right)
-    hess = 0.5*(x - Q.dot(x.T.dot(Q)))
-    return hess
 
 def renyi(Q, X, dis_legs, svd_legs, alpha, chi):
     ''' Renyi entropy objective function
@@ -208,7 +149,7 @@ def renyi(Q, X, dis_legs, svd_legs, alpha, chi):
 
     fac = 2*alpha/(1-alpha)/np.sum(s**(2*alpha))
     ds = fac*s**(2*alpha - 1)
-    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
+    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T.conj())
     
     return cost, egrad
 
@@ -260,7 +201,7 @@ def trunc_error_hess(Q, E, X, dis_legs, svd_legs, alpha, chi):
 
     Returns
     -------
-    hess  : Riemannian hessian at Q applied to E
+    ehess  : Euclidean hessian at Q applied to E
     '''
     
     X_dis = ten_to_mat(X, dis_legs)
@@ -268,14 +209,10 @@ def trunc_error_hess(Q, E, X, dis_legs, svd_legs, alpha, chi):
     QX_svd = ten_to_mat(QX, svd_legs)
     u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
     m, k, n = u.shape[0], u.shape[1], v.shape[1]
-    
+
     ds = np.hstack([np.zeros(chi), 2*s[chi:]])
-    ds_mat = u @ np.diag(ds) @ v
+    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T.conj())
 
-    dQX = ten_to_mat(mat_to_ten(ds_mat, X.shape, svd_legs), dis_legs)
-    egrad = (dQX @ X_dis.conj().T)
-
-    
     EX_dis = E@ten_to_mat(X, dis_legs)
     EX_svd = ten_to_mat(mat_to_ten(EX_dis, X.shape, dis_legs), svd_legs)
 
@@ -299,14 +236,11 @@ def trunc_error_hess(Q, E, X, dis_legs, svd_legs, alpha, chi):
     DVE = v.T.conj() @ (F*(np.diag(s) @ u.T.conj() @ EX_svd @ v.T.conj() + v @ EX_svd.T.conj() @ u @ np.diag(s))) + \
           (np.eye(n) - v.T.conj() @ v) @ EX_svd.T.conj() @ u @ np.diag(1/s)
     
-    Degrad =    ten_to_mat(mat_to_ten(DUE @ np.diag(ds) @ v, X.shape, svd_legs), dis_legs) + \
-                ten_to_mat(mat_to_ten(u @ np.diag(DdfE) @ v, X.shape, svd_legs), dis_legs) + \
-                ten_to_mat(mat_to_ten(u @ np.diag(ds) @ DVE.T.conj(), X.shape, svd_legs), dis_legs)
+    ehess = ten_to_mat(mat_to_ten(DUE @ np.diag(ds) @ v + \
+                                       u @ np.diag(DdfE) @ v + \
+                                       u @ np.diag(ds) @ DVE.T.conj(), 
+                                       X.shape, svd_legs), dis_legs)@ X_dis.T.conj()
     
-    Degrad = Degrad @ X_dis.T.conj()
-
-    right = E @ egrad.T.conj() @ Q + Q @ Degrad.T.conj() @ Q + Q @ egrad.T.conj() @ E
-    ehess = 0.5*(Degrad - right)
     return ehess
 
 def von_neumann(Q, X, dis_legs, svd_legs, alpha, chi):
@@ -503,8 +437,6 @@ def disentangle(X, dis_legs, svd_legs,
         # manifold = pymanopt.manifolds.SpecialOrthogonalGroup(n, retraction="polar")
         manifold = pymanopt.manifolds.UnitaryGroup(n, retraction="polar")
         
-
-
         @pymanopt.function.numpy(manifold)
         def cost(Q):
             return objective(Q, X, dis_legs, svd_legs, alpha, chi)[0]
@@ -514,9 +446,7 @@ def disentangle(X, dis_legs, svd_legs,
         
         @pymanopt.function.numpy(manifold)
         def ehess(Q, E):
-            if objective==nuclear:
-                return nuclear_hess(Q, E, X, dis_legs, svd_legs, alpha, chi)
-            elif objective==trunc_error:
+            if objective==trunc_error:
                 return trunc_error_hess(Q, E, X, dis_legs, svd_legs, alpha, chi)
             else:
                 warnings.warn("user-selected cost function does not have Hessian support", UserWarning)

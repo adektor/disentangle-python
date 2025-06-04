@@ -40,7 +40,3 @@ problem = pymanopt.Problem(manifold=manifold,
 
 check_gradient(problem)
 check_hessian(problem)
-
-# --- Solve optimization ---
-solver = ConjugateGradient()
-result = solver.run(problem)
