@@ -7,8 +7,7 @@ import pymanopt.tools
 import pymanopt.tools.diagnostics
 
 # TODO:
-#       - cost, gradients, hessian have repeated operations...
-#       - orthogonal -> unitary
+#       - cost, gradient, hessian have repeated operations...
 
 # ------- Reshaping: tensor <-> matrix ------- #
 def ten_to_mat(X, row_legs):
@@ -267,7 +266,7 @@ def von_neumann(Q, X, dis_legs, svd_legs, alpha, chi):
 
     cost = -2*np.sum(s**2*np.log(s))
     ds = -2*s*(np.log(s**2) + 1)
-    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
+    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T.conj())
 
     return cost, egrad
 # ------------------------------------------------- #
@@ -281,6 +280,7 @@ def disentangle(X, dis_legs, svd_legs,
                 max_time=1e100,
                 optimizer="rCG",
                 objective=renyi,
+                man="Steifel",
                 alpha=0.5,
                 chi=0,
                 verbosity=0,
@@ -306,6 +306,7 @@ def disentangle(X, dis_legs, svd_legs,
     max_time=1e100      : maximum optimizer run time in seconds
     optimizer="rCG"     : default "rCG"=Riemannian Conjugate Gradient
     objective=renyi     : objective function to optimize
+    man="Steifel"       : manifold on which disentangler is optimized
     alpha=0.5           : parameter for renyi entropy
     chi=0               : parameter for trunc_error objective
     verbosity=0         : 1 print before and after optimization, 2 print every iteration of optimizer
@@ -433,9 +434,10 @@ def disentangle(X, dis_legs, svd_legs,
 
         if verbosity>0:
             print("\nRiemannian optimizer")
-        # manifold = pymanopt.manifolds.Stiefel(n, n)
-        # manifold = pymanopt.manifolds.SpecialOrthogonalGroup(n, retraction="polar")
-        manifold = pymanopt.manifolds.UnitaryGroup(n, retraction="polar")
+        if np.iscomplexobj(X) or man=='Unitary':
+            manifold = pymanopt.manifolds.UnitaryGroup(n, retraction="polar")
+        else:
+            manifold = pymanopt.manifolds.Stiefel(n, n)
         
         @pymanopt.function.numpy(manifold)
         def cost(Q):
