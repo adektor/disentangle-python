@@ -7,8 +7,7 @@ import pymanopt.tools
 import pymanopt.tools.diagnostics
 
 # TODO:
-#       - cost, gradients, hessian have repeated operations...
-#       - orthogonal -> unitary
+#       - cost, gradient, hessian have repeated operations...
 
 # ------- Reshaping: tensor <-> matrix ------- #
 def ten_to_mat(X, row_legs):
@@ -119,68 +118,9 @@ def nuclear(Q, X, dis_legs, svd_legs, alpha, chi):
     
     cost = np.sum(s)
     ds = np.ones_like(s)
-    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
+    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T.conj())
 
     return cost, egrad
-
-def nuclear_hess(Q, E, X, dis_legs, svd_legs, alpha, chi):
-    ''' Truncation error objective function (sum of trailing singular values squared)
-    Args
-    ----
-    Q        : disentangler
-    E        : matrix on which Hessian acts
-    X        : NumPy array to be disentangled
-    dis_legs : dimensions of X on which Q acts
-    svd_legs : dimensions indicating which reshaping of X is SVD
-    alpha    : parameter (not used)
-    chi      : parameter - truncation rank
-
-    Returns
-    -------
-    hess  : Riemannian hessian at Q applied to E
-    '''
-    
-    X_dis = ten_to_mat(X, dis_legs)
-    QX = mat_to_ten(Q@X_dis, X.shape, dis_legs)
-    QX_svd = ten_to_mat(QX, svd_legs)
-    u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
-    m, k, n = u.shape[0], u.shape[1], v.shape[1]
-
-    ds = 2*alpha*(s**(2*alpha-1))
-    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
-
-    EX_dis = E@ten_to_mat(X, dis_legs)
-    EX_svd = ten_to_mat(mat_to_ten(EX_dis, X.shape, dis_legs), svd_legs)
-
-    # F matrix (4.27)
-    F = np.zeros([len(s), len(s)])
-    for i in range(len(s)):
-        for j in range(len(s)):
-            if i == j:
-                continue
-            F[i, j] = 1/(s[j]**2 - s[i]**2)
-
-    DUE = u @ (F*(u.T @ EX_svd @ v.T @ np.diag(s) + np.diag(s) @ v @ EX_svd.T @ u)) + \
-          (np.eye(m) - u @ u.T) @ EX_svd @ v.T @ np.diag(1/s)
-
-
-    d2fds2 = (2*alpha-1)*2*alpha*(s**(2*alpha-2))
-
-    Ds = np.diag(u.T @ EX_svd @ v.T) 
-    DdfE = d2fds2*Ds
-
-    DVE = v.T @ (F*(np.diag(s) @ u.T @ EX_svd @ v.T + v @ EX_svd.T @ u @ np.diag(s))) + \
-          (np.eye(n) - v.T @ v) @ EX_svd.T @ u @ np.diag(1/s)
-    
-    Dgrad_fbar = ten_to_mat(mat_to_ten(DUE @ np.diag(ds) @ v, X.shape, svd_legs), dis_legs) + \
-                 ten_to_mat(mat_to_ten(u @ np.diag(DdfE) @ v, X.shape, svd_legs), dis_legs) + \
-                 ten_to_mat(mat_to_ten(u @ np.diag(ds) @ DVE.T, X.shape, svd_legs), dis_legs)
-    
-    left = Dgrad_fbar @ X_dis.T
-    right = E @ egrad.T @ Q + Q @ left.T @ Q + Q @ egrad.T @ E
-    x = 0.5*(left - right)
-    hess = 0.5*(x - Q.dot(x.T.dot(Q)))
-    return hess
 
 def renyi(Q, X, dis_legs, svd_legs, alpha, chi):
     ''' Renyi entropy objective function
@@ -208,7 +148,7 @@ def renyi(Q, X, dis_legs, svd_legs, alpha, chi):
 
     fac = 2*alpha/(1-alpha)/np.sum(s**(2*alpha))
     ds = fac*s**(2*alpha - 1)
-    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
+    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T.conj())
     
     return cost, egrad
 
@@ -236,10 +176,15 @@ def trunc_error(Q, X, dis_legs, svd_legs, alpha, chi):
     u, s, v = np.linalg.svd(QX_svd, full_matrices=False)
 
     cost = np.sum(s[chi:]**2)
+
     ds = np.hstack([np.zeros(chi), 2*s[chi:]])
-    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
+    ds_mat = u @ np.diag(ds) @ v
+
+    dQX = ten_to_mat(mat_to_ten(ds_mat, X.shape, svd_legs), dis_legs)
+    egrad = (dQX @ X_dis.conj().T)
 
     return cost, egrad
+
 
 def trunc_error_hess(Q, E, X, dis_legs, svd_legs, alpha, chi):
     ''' Truncation error objective function (sum of trailing singular values squared)
@@ -255,7 +200,7 @@ def trunc_error_hess(Q, E, X, dis_legs, svd_legs, alpha, chi):
 
     Returns
     -------
-    hess  : Riemannian hessian at Q applied to E
+    ehess  : Euclidean hessian at Q applied to E
     '''
     
     X_dis = ten_to_mat(X, dis_legs)
@@ -265,7 +210,7 @@ def trunc_error_hess(Q, E, X, dis_legs, svd_legs, alpha, chi):
     m, k, n = u.shape[0], u.shape[1], v.shape[1]
 
     ds = np.hstack([np.zeros(chi), 2*s[chi:]])
-    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
+    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T.conj())
 
     EX_dis = E@ten_to_mat(X, dis_legs)
     EX_svd = ten_to_mat(mat_to_ten(EX_dis, X.shape, dis_legs), svd_legs)
@@ -278,27 +223,24 @@ def trunc_error_hess(Q, E, X, dis_legs, svd_legs, alpha, chi):
                 continue
             F[i, j] = 1/(s[j]**2 - s[i]**2)
 
-    DUE = u @ (F*(u.T @ EX_svd @ v.T @ np.diag(s) + np.diag(s) @ v @ EX_svd.T @ u)) + \
-          (np.eye(m) - u @ u.T) @ EX_svd @ v.T @ np.diag(1/s)
+    DUE = u @ (F*(u.T.conj() @ EX_svd @ v.T.conj() @ np.diag(s) + np.diag(s) @ v @ EX_svd.T.conj() @ u)) + \
+          (np.eye(m) - u @ u.T.conj()) @ EX_svd @ v.T.conj() @ np.diag(1/s)
 
     d2fds2 = np.zeros(k)
     d2fds2[chi:] = 2
 
-    Ds = np.diag(u.T @ EX_svd @ v.T) 
+    Ds = np.diag(u.T.conj() @ EX_svd @ v.T.conj()) 
     DdfE = d2fds2*Ds
 
-    DVE = v.T @ (F*(np.diag(s) @ u.T @ EX_svd @ v.T + v @ EX_svd.T @ u @ np.diag(s))) + \
-          (np.eye(n) - v.T @ v) @ EX_svd.T @ u @ np.diag(1/s)
+    DVE = v.T.conj() @ (F*(np.diag(s) @ u.T.conj() @ EX_svd @ v.T.conj() + v @ EX_svd.T.conj() @ u @ np.diag(s))) + \
+          (np.eye(n) - v.T.conj() @ v) @ EX_svd.T.conj() @ u @ np.diag(1/s)
     
-    Dgrad_fbar = ten_to_mat(mat_to_ten(DUE @ np.diag(ds) @ v, X.shape, svd_legs), dis_legs) + \
-                 ten_to_mat(mat_to_ten(u @ np.diag(DdfE) @ v, X.shape, svd_legs), dis_legs) + \
-                 ten_to_mat(mat_to_ten(u @ np.diag(ds) @ DVE.T, X.shape, svd_legs), dis_legs)
+    ehess = ten_to_mat(mat_to_ten(DUE @ np.diag(ds) @ v + \
+                                       u @ np.diag(DdfE) @ v + \
+                                       u @ np.diag(ds) @ DVE.T.conj(), 
+                                       X.shape, svd_legs), dis_legs)@ X_dis.T.conj()
     
-    left = Dgrad_fbar @ X_dis.T
-    right = E @ egrad.T @ Q + Q @ left.T @ Q + Q @ egrad.T @ E
-    x = 0.5*(left - right)
-    hess = 0.5*(x - Q.dot(x.T.dot(Q)))
-    return hess
+    return ehess
 
 def von_neumann(Q, X, dis_legs, svd_legs, alpha, chi):
     ''' Von-Neumann entropy objective function
@@ -324,7 +266,7 @@ def von_neumann(Q, X, dis_legs, svd_legs, alpha, chi):
 
     cost = -2*np.sum(s**2*np.log(s))
     ds = -2*s*(np.log(s**2) + 1)
-    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T)
+    egrad = ten_to_mat(mat_to_ten(u@np.diag(ds)@v, X.shape, svd_legs), dis_legs) @ (X_dis.T.conj())
 
     return cost, egrad
 # ------------------------------------------------- #
@@ -338,6 +280,7 @@ def disentangle(X, dis_legs, svd_legs,
                 max_time=1e100,
                 optimizer="rCG",
                 objective=renyi,
+                man="Steifel",
                 alpha=0.5,
                 chi=0,
                 verbosity=0,
@@ -363,6 +306,7 @@ def disentangle(X, dis_legs, svd_legs,
     max_time=1e100      : maximum optimizer run time in seconds
     optimizer="rCG"     : default "rCG"=Riemannian Conjugate Gradient
     objective=renyi     : objective function to optimize
+    man="Steifel"       : manifold on which disentangler is optimized
     alpha=0.5           : parameter for renyi entropy
     chi=0               : parameter for trunc_error objective
     verbosity=0         : 1 print before and after optimization, 2 print every iteration of optimizer
@@ -452,7 +396,7 @@ def disentangle(X, dis_legs, svd_legs,
             QX_svd_chi = u@np.diag(s)@v
             QX_chi = mat_to_ten(QX_svd_chi, X.shape, svd_legs)
 
-            M = ten_to_mat(QX_chi, dis_legs) @ (X_dis.T)
+            M = ten_to_mat(QX_chi, dis_legs) @ (X_dis.conj().T)
             u, _, v = np.linalg.svd(M, full_matrices=False)
             Qnew = u@v
             dQ.append(np.linalg.norm(Qnew-Q))
@@ -490,8 +434,11 @@ def disentangle(X, dis_legs, svd_legs,
 
         if verbosity>0:
             print("\nRiemannian optimizer")
-        manifold = pymanopt.manifolds.Stiefel(n, n)
-
+        if np.iscomplexobj(X) or man=='Unitary':
+            manifold = pymanopt.manifolds.UnitaryGroup(n, retraction="polar")
+        else:
+            manifold = pymanopt.manifolds.Stiefel(n, n)
+        
         @pymanopt.function.numpy(manifold)
         def cost(Q):
             return objective(Q, X, dis_legs, svd_legs, alpha, chi)[0]
@@ -500,10 +447,8 @@ def disentangle(X, dis_legs, svd_legs,
             return objective(Q, X, dis_legs, svd_legs, alpha, chi)[1]
         
         @pymanopt.function.numpy(manifold)
-        def hess(Q, E):
-            if objective==nuclear:
-                return nuclear_hess(Q, E, X, dis_legs, svd_legs, alpha, chi)
-            elif objective==trunc_error:
+        def ehess(Q, E):
+            if objective==trunc_error:
                 return trunc_error_hess(Q, E, X, dis_legs, svd_legs, alpha, chi)
             else:
                 warnings.warn("user-selected cost function does not have Hessian support", UserWarning)
@@ -511,7 +456,7 @@ def disentangle(X, dis_legs, svd_legs,
         problem = pymanopt.Problem(manifold=manifold, 
                                    cost=cost, 
                                    euclidean_gradient=egrad,
-                                   riemannian_hessian=hess
+                                   euclidean_hessian=ehess
                                    )
         if check_grad:
             pymanopt.tools.diagnostics.check_gradient(problem)
@@ -535,6 +480,7 @@ def disentangle(X, dis_legs, svd_legs,
             raise ValueError("User specified optimizer is not recognized")
         
         result = solver.run(problem, initial_point=Q0)
+        # result = solver.run(problem)
         Q = result.point
 
         if return_log:
@@ -545,6 +491,7 @@ def disentangle(X, dis_legs, svd_legs,
             
     # ------------------ end optimizers ------------------ #
 
+    # final disentangled SVD
     U, S, V = disentangled_usv(X, Q, dis_legs, svd_legs)
 
     if return_log:
