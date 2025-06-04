@@ -1,4 +1,5 @@
 /myenv
 /venv
+/dist
 /__pycache__
 .vscode

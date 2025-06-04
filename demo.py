@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from disentangle import *
+from tensor_disentangler.disentangle import *
 
 # Define a tensor
 X = np.random.rand(8,8,8,8)
