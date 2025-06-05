@@ -6,7 +6,7 @@ The user provides the tensor, dimensions of the tensor on which the unitary matr
 
 ## Installation 
 
-We should make this available via pip
+pip install tensor_disentangler
 
 ## Usage
 
