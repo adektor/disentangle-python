@@ -122,6 +122,49 @@ def nuclear(Q, X, dis_legs, svd_legs, alpha, chi):
 
     return cost, egrad
 
+
+def truncate_svd(U, S, V, trunc_tol, chi):
+    """
+    Truncate SVD factors U, S, V with relative tolerance and max rank.
+
+    Parameters
+    ----------
+    U, S, V : Factors from np.linalg.svd(A, full_matrices=False).
+    trunc_tol : Relative truncation error tolerance.
+    chi : Maximum allowed rank.
+
+    Returns
+    -------
+    Utr, Str, Vtr : Truncated SVD factors.
+    kept_rank : Number of singular values kept.
+    rel_error : Relative truncation error achieved.
+    """
+    # squared singular values for Frobenius norm accounting
+    svals_sq = S**2
+    total_norm_sq = np.sum(svals_sq)
+
+    # cumulative discarded norm
+    disc_norm_sq = np.cumsum(svals_sq[::-1])[::-1]
+
+    # relative error if truncating after k singular values
+    rel_errs = np.sqrt(disc_norm_sq / total_norm_sq)
+
+    # find smallest k s.t. error <= trunc_tol
+    k_tol = np.searchsorted(rel_errs <= trunc_tol, True) + 1
+    k_tol = min(len(S), k_tol)  # in case tol is too tight
+
+    # final rank is min(chi, k_tol)
+    k = min(chi, k_tol)
+
+    Utr = U[:, :k]
+    Str = S[:k]
+    Vtr = V[:k, :]
+
+    rel_error = np.sqrt(np.sum(svals_sq[k:]) / total_norm_sq)
+
+    return Utr, Str, Vtr, rel_error
+
+
 def renyi(Q, X, dis_legs, svd_legs, alpha, chi):
     ''' Renyi entropy objective function
     Args
@@ -280,9 +323,9 @@ def disentangle(X, dis_legs, svd_legs,
                 max_time=1e100,
                 optimizer="rCG",
                 objective=renyi,
-                man="Steifel",
                 alpha=0.5,
                 chi=0,
+                man="Steifel",
                 verbosity=0,
                 return_log=False,
                 check_grad=False,
@@ -316,6 +359,15 @@ def disentangle(X, dis_legs, svd_legs,
     ------------------------------
     check_grad=False
     check_hess=False
+
+    Returns
+    -------
+    Q   : prod(X.shape[dis_dims]) x prod(X.shape[dis_dims])
+    U   : prod(X.shape[svd_dims]) x chi
+    S   : chi x chi
+    V   : chi x prod(X.shape[svd_dims])
+
+    log : if return_log is true
     '''
 
     # ------------------ Check inputs ------------------ #
@@ -498,3 +550,135 @@ def disentangle(X, dis_legs, svd_legs,
         return Q, U, S, V, log
     else:
         return Q, U, S, V
+    
+
+def disentangle_bs(X, dis_legs, svd_legs, tol,
+                max_dis=5,
+                initial="identity",
+                max_iterations=1000,
+                min_dQ=1e-6,
+                min_grad_norm=1e-6,
+                max_time=1e100,
+                man="Steifel",
+                verbosity=0
+                ):
+    '''
+    Disentangler binary search for determining a target rank chi and disentangler Q
+    so that truncation error is less than tol. 
+
+    Required Args
+    -------------
+    X        : NumPy array
+    dis_legs : list of dimensions indicating legs the disentangler is applied to
+    svd_legs : list of dimensions indicating legs for disentangling
+    tol      : target truncation tolerance
+    
+    Kwargs
+    ------
+    max_dis=5           : maximum number of disentanglers computed (# of steps in binary search)
+    initial="identity"  : initial disentangler, user can specify "random" or 2D NumPy array with compatible dimensions
+    max_iterations=1000 : maximum number of iterations of the selected optimizer
+    min_dQ=1e-6         : termination threshold for change in Q in alternating optimizer
+    min_grad_norm=1e-6  : termination threshold for norm of the gradient
+    max_time=1e100      : maximum optimizer run time in seconds
+    optimizer="rCG"     : default "rCG"=Riemannian Conjugate Gradient
+    objective=renyi     : objective function to optimize
+    man="Steifel"       : manifold on which disentangler is optimized
+    alpha=0.5           : parameter for renyi entropy
+    chi=0               : parameter for trunc_error objective
+    verbosity=0         : 1 print before and after optimization, 2 print every iteration of optimizer
+    return_log=False    : return log of optimizer info
+    
+    Returns
+    -------
+    Q   : prod(X.shape[dis_dims]) x prod(X.shape[dis_dims])
+    U   : prod(X.shape[svd_dims]) x chi
+    S   : chi x chi
+    V   : chi x prod(X.shape[svd_dims])
+
+    log : if return_log is true
+    '''
+
+    # First disentangler is computed with Renyi-1/2 entropy
+    Q, U, S, V = disentangle(X, dis_legs, svd_legs, 
+                        optimizer="rCG",
+                        objective=renyi,
+                        alpha=0.5,
+                        initial=initial,
+                        max_iterations=max_iterations,
+                        min_grad_norm=min_grad_norm,
+                        max_time=max_time,
+                        man=man,
+                        verbosity=verbosity-1
+                        )
+    
+    # Based on truncation error pick left pointer, right pointer, and target rank
+    kl = 0
+    kr, rel_err = find_rank(S, tol, chi=None)
+    chi = kr
+    iter = 1
+
+    if verbosity >= 1:
+        print(f"Initial Renyi rank = {chi}, truncation error = {rel_err:.2e}", flush=True)
+    
+    while kl <= kr and iter < max_dis:
+        # get test rank k by bisection
+        k = int(np.ceil((kl + kr)/2))
+
+        if verbosity >= 1:
+            print(f"[Iteration {iter}] testing rank k = {k} (kl={kl}, kr={kr})", flush=True)
+
+        # Disentangle with test rank k
+        Q, U, S, V = disentangle(X, dis_legs, svd_legs, 
+                            optimizer="alternating", 
+                            objective=trunc_error,
+                            chi=k,
+                            initial=initial,
+                            min_dQ=min_dQ,
+                            max_iterations=max_iterations,
+                            max_time=max_time,
+                            verbosity=verbosity-1
+                            )
+        # Relative truncation error
+        rel_err = np.linalg.norm(S[k:]) / np.linalg.norm(S)
+        
+        if verbosity >= 1:
+            print(f"              truncation error {rel_err:.2e}")
+        
+        # Update left pointer, right pointer, and valid truncation rank chi
+        if rel_err <= tol:
+            chi = k
+            kr = k - 1
+        else:
+            kl = k + 1
+        
+        iter = iter + 1
+
+    return Q, U, S, V
+
+
+def find_rank(S, rel_tol, chi=None):
+    """
+    Find truncation rank k for singular values S
+    based on relative truncation error and optional max rank chi.
+    """
+    svals_sq = S**2
+    total_norm_sq = np.sum(svals_sq)
+
+    # cumulative discarded norm if we truncate at k
+    disc_norm_sq = np.cumsum(svals_sq[::-1])[::-1]  # shape (r,)
+    rel_errs = np.sqrt(disc_norm_sq / total_norm_sq)
+
+    # smallest k with rel_err <= tol
+    k_tol = np.argmax(rel_errs <= rel_tol) + 1
+    if k_tol == 0:  # in case no error is small enough
+        k_tol = len(S)
+
+    # apply max rank if provided
+    if chi is not None:
+        k = min(k_tol, chi)
+    else:
+        k = k_tol
+
+    rel_error = np.sqrt(np.sum(svals_sq[k:]) / total_norm_sq)
+    return k, rel_error
