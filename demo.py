@@ -61,7 +61,7 @@ plt.show()
 
 # If a certain truncation tolerance is desired, we can find the corresponding rank 
 # with disentangle binary search as follows
-Qa, Ua, Sa, Va = disentangle_bs(X, dis_legs, svd_legs, 1e-6, 
+Qbs, Ubs, Sbs, Vbs, chi = disentangle_bs(X, dis_legs, svd_legs, 1e-6, 
                   max_dis = 10, 
                   min_dQ=1e-12, 
                   verbosity=1

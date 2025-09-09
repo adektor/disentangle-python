@@ -387,8 +387,9 @@ def disentangle(X, dis_legs, svd_legs,
         Q0 = np.eye(n)
     elif initial == "random":
         raise ValueError("initial option not supported")
-    elif isinstance(Q, np.ndarray):
-        if Q.ndim != 2 or Q.shape[0] != Q.shape[1]:
+    elif isinstance(initial, np.ndarray):
+        Q0 = initial
+        if Q0.ndim != 2 or Q0.shape[0] != n or Q0.shape[1] != n:
             raise ValueError("Initial disentangler has incorrect dimensions.")
     else:
         raise TypeError("Initial disentangler must be 'identity', 'random', or a 2D NumPy array with compatible dimensions.")
@@ -540,7 +541,7 @@ def disentangle(X, dis_legs, svd_legs,
                    "gradnorm_history"  : result.log["iterations"]["gradient_norm"],
                    "iterations"        : result.iterations,
                    "runtime"           : result.time}
-            
+
     # ------------------ end optimizers ------------------ #
 
     # final disentangled SVD
@@ -581,13 +582,8 @@ def disentangle_bs(X, dis_legs, svd_legs, tol,
     min_dQ=1e-6         : termination threshold for change in Q in alternating optimizer
     min_grad_norm=1e-6  : termination threshold for norm of the gradient
     max_time=1e100      : maximum optimizer run time in seconds
-    optimizer="rCG"     : default "rCG"=Riemannian Conjugate Gradient
-    objective=renyi     : objective function to optimize
     man="Steifel"       : manifold on which disentangler is optimized
-    alpha=0.5           : parameter for renyi entropy
-    chi=0               : parameter for trunc_error objective
     verbosity=0         : 1 print before and after optimization, 2 print every iteration of optimizer
-    return_log=False    : return log of optimizer info
     
     Returns
     -------
@@ -600,7 +596,7 @@ def disentangle_bs(X, dis_legs, svd_legs, tol,
     '''
 
     # First disentangler is computed with Renyi-1/2 entropy
-    Q, U, S, V = disentangle(X, dis_legs, svd_legs, 
+    Qbs, Ubs, Sbs, Vbs = disentangle(X, dis_legs, svd_legs, 
                         optimizer="rCG",
                         objective=renyi,
                         alpha=0.5,
@@ -614,7 +610,7 @@ def disentangle_bs(X, dis_legs, svd_legs, tol,
     
     # Based on truncation error pick left pointer, right pointer, and target rank
     kl = 0
-    kr, rel_err = find_rank(S, tol, chi=None)
+    kr, rel_err = find_rank(Sbs, tol, chi=None)
     chi = kr
     iter = 1
 
@@ -647,14 +643,15 @@ def disentangle_bs(X, dis_legs, svd_legs, tol,
         
         # Update left pointer, right pointer, and valid truncation rank chi
         if rel_err <= tol:
-            chi = k
             kr = k - 1
+            chi = k
+            Qbs, Ubs, Sbs, Vbs = Q, U, S, V
         else:
             kl = k + 1
         
         iter = iter + 1
 
-    return Q, U, S, V
+    return Qbs, Ubs, Sbs, Vbs, chi
 
 
 def find_rank(S, rel_tol, chi=None):
